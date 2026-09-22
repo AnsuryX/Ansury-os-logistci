@@ -1,0 +1,6 @@
+{
+  "name": "Ansury OS Enterprise Haul",
+  "description": "Real-time telematics, East African corridor fleet dispatch, M-Pesa liquidity reconciliation, and unit economics treasury system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
