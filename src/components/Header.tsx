@@ -52,9 +52,9 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Right Controls & Profile */}
       <div className="flex items-center gap-space-md">
         {/* Live Verified Audit Badge */}
-        <div className="hidden sm:flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-          <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-          <span className="font-label-sm text-[11px] text-emerald-800 font-bold">
+        <div className="hidden lg:flex items-center gap-1.5 bg-surface-container-low px-2.5 py-1 rounded-full border border-[#dce9ff]">
+          <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+          <span className="font-label-sm text-[11px] text-on-surface font-semibold">
             Live Treasury Node
           </span>
         </div>

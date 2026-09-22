@@ -1,11 +1,22 @@
-import React, { useState } from 'react';
-import { CompanyProfile, UserProfile } from '../types';
+import React, { useState, useEffect } from 'react';
+import { CompanyProfile, UserProfile, Vehicle, Customer } from '../types';
+import {
+  checkSupabaseHealth,
+  SupabaseHealthStatus,
+  upsertVehicleToSupabase,
+  upsertCustomerToSupabase,
+  upsertCompanyProfileToSupabase,
+  upsertUserProfileToSupabase,
+} from '../lib/supabase';
+import { SUPABASE_CONFIG, SUPABASE_SQL_SCHEMA } from '../data/supabaseSchema';
 
 interface SettingsScreenProps {
   companyProfile: CompanyProfile;
   userProfile: UserProfile;
   onUpdateCompanyProfile: (profile: CompanyProfile) => void;
   onUpdateUserProfile: (profile: UserProfile) => void;
+  vehicles?: Vehicle[];
+  customers?: Customer[];
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -13,8 +24,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   userProfile,
   onUpdateCompanyProfile,
   onUpdateUserProfile,
+  vehicles = [],
+  customers = [],
 }) => {
-  const [activeTab, setActiveTab] = useState<'company' | 'user' | 'fleet-rules' | 'treasury'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'user' | 'fleet-rules' | 'treasury' | 'database'>('company');
 
   // Company state
   const [companyForm, setCompanyForm] = useState<CompanyProfile>(companyProfile);
@@ -36,6 +49,52 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [pettyCashDailyLimitKes, setPettyCashDailyLimitKes] = useState('100000');
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Supabase Database state
+  const [dbHealth, setDbHealth] = useState<SupabaseHealthStatus | null>(null);
+  const [isCheckingDb, setIsCheckingDb] = useState(false);
+  const [isSeedingDb, setIsSeedingDb] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const checkDb = async () => {
+    setIsCheckingDb(true);
+    const res = await checkSupabaseHealth();
+    setDbHealth(res);
+    setIsCheckingDb(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'database') {
+      checkDb();
+    }
+  }, [activeTab]);
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+    setCopiedSql(true);
+    triggerToast('SQL Schema copied to clipboard! Paste into Supabase SQL Editor and click Run.');
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
+
+  const handlePushToSupabase = async () => {
+    setIsSeedingDb(true);
+    triggerToast('Pushing company profile, vehicles, and customers to Supabase...');
+
+    let vCount = 0;
+    for (const v of vehicles) {
+      if (await upsertVehicleToSupabase(v)) vCount++;
+    }
+    let cCount = 0;
+    for (const c of customers) {
+      if (await upsertCustomerToSupabase(c)) cCount++;
+    }
+    await upsertCompanyProfileToSupabase(companyForm);
+    await upsertUserProfileToSupabase(userForm);
+
+    setIsSeedingDb(false);
+    triggerToast(`Sync complete! Pushed company profile, ${vCount} vehicles, and ${cCount} shippers.`);
+    await checkDb();
+  };
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -127,6 +186,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         >
           <span className="material-symbols-outlined text-[16px]">account_balance_wallet</span>
           Treasury & SWIFT Rules
+        </button>
+
+        <button
+          onClick={() => setActiveTab('database')}
+          className={`px-4 py-2 rounded-xl font-body-sm text-[12px] font-semibold transition-all flex items-center gap-1.5 ${
+            activeTab === 'database'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-on-surface-variant hover:bg-surface-container'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">database</span>
+          <span>Database & Cloud Sync</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
         </button>
       </div>
 
@@ -588,6 +660,210 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             >
               Save Treasury Rules
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 5: DATABASE & SUPABASE CLOUD */}
+      {activeTab === 'database' && (
+        <div className="bg-surface-container-lowest rounded-2xl p-6 border border-[#dce9ff] shadow-[0_1px_8px_rgba(0,0,0,0.03)] space-y-6">
+          <div className="border-b border-[#e5eeff] pb-3 flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-headline-sm text-base font-bold text-on-surface">
+                  Supabase Cloud PostgreSQL Database
+                </h2>
+                <span className="font-label-code text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full font-bold">
+                  PROJECT: {SUPABASE_CONFIG.projectRef}
+                </span>
+              </div>
+              <p className="font-body-sm text-[12px] text-outline">
+                Direct integration with your Supabase cloud backend for real-time fleet, customer, and accounting persistence.
+              </p>
+            </div>
+
+            <button
+              onClick={checkDb}
+              disabled={isCheckingDb}
+              className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-code text-[11px] font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span className={`material-symbols-outlined text-[15px] ${isCheckingDb ? 'animate-spin' : ''}`}>
+                refresh
+              </span>
+              {isCheckingDb ? 'Probing...' : 'Probe Database'}
+            </button>
+          </div>
+
+          {/* Connection Status Card */}
+          <div className="p-4 bg-surface-container-low rounded-2xl border border-[#dce9ff] flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="font-bold text-on-surface text-[14px]">
+                  Connected to Supabase Cluster
+                </span>
+                {dbHealth && dbHealth.latencyMs > 0 && (
+                  <span className="font-label-code text-[11px] text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    {dbHealth.latencyMs}ms Latency
+                  </span>
+                )}
+              </div>
+              <div className="font-label-code text-[12px] text-outline break-all">
+                REST Endpoint: <span className="text-on-surface font-semibold">{SUPABASE_CONFIG.url}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <a
+                href={SUPABASE_CONFIG.dashboardUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-1.5 rounded-xl bg-surface-container-lowest border border-[#dce9ff] hover:bg-surface-container font-body-sm text-[12px] font-semibold text-on-surface flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                Supabase Dashboard
+              </a>
+            </div>
+          </div>
+
+          {/* Migration Quick-Action Banner */}
+          <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 text-[12px] space-y-3">
+            <div className="flex items-center gap-2 font-bold text-blue-900 text-[13px]">
+              <span className="material-symbols-outlined text-[18px]">terminal</span>
+              <span>Execute Database Migrations in Supabase</span>
+            </div>
+            <p className="text-blue-900/80 leading-relaxed">
+              To create your tables (vehicles, customers, company profile, expenses, and audit ledger) in PostgreSQL, click <strong>Copy SQL Migration Script</strong>, then click <strong>Open SQL Editor</strong>, paste into the query window, and click <strong>Run</strong>.
+            </p>
+            <div className="flex items-center gap-2.5 flex-wrap pt-1">
+              <button
+                onClick={handleCopySql}
+                className="px-4 py-2 rounded-xl bg-primary text-white font-body-sm text-[12px] font-semibold hover:bg-primary-container transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  {copiedSql ? 'check' : 'content_copy'}
+                </span>
+                {copiedSql ? 'SQL Copied to Clipboard!' : 'Copy SQL Migration Script'}
+              </button>
+
+              <a
+                href={SUPABASE_CONFIG.sqlEditorUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface font-body-sm text-[12px] font-semibold hover:bg-surface-container transition-all flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                Open Supabase SQL Editor
+              </a>
+
+              <button
+                onClick={handlePushToSupabase}
+                disabled={isSeedingDb}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-body-sm text-[12px] font-semibold hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-[16px] ${isSeedingDb ? 'animate-spin' : ''}`}>
+                  {isSeedingDb ? 'sync' : 'cloud_upload'}
+                </span>
+                {isSeedingDb ? 'Syncing...' : 'Push Application Records'}
+              </button>
+            </div>
+          </div>
+
+          {/* Tables Schema Status */}
+          <div className="bg-surface-container-lowest rounded-2xl border border-[#dce9ff] overflow-hidden">
+            <div className="px-4 py-2.5 bg-surface-container-low border-b border-[#e5eeff] flex items-center justify-between">
+              <span className="font-label-sm text-[11px] text-outline font-semibold uppercase">
+                Database Schema Tables (`public`)
+              </span>
+              <span className="font-label-code text-[11px] text-outline">
+                {dbHealth && Object.values(dbHealth.tables).some(Boolean) ? 'Connected & Verified' : 'Ready to Provision'}
+              </span>
+            </div>
+
+            <div className="divide-y divide-[#eff4ff]">
+              {[
+                {
+                  name: 'vehicles',
+                  desc: 'GPS telematics, driver assignments, tank capacities, actual km/L vs target',
+                  count: `${vehicles.length} assets`,
+                  live: dbHealth?.tables.vehicles,
+                },
+                {
+                  name: 'customers',
+                  desc: 'Petroleum marketing contracts (Vivo, Total, One Petroleum), TINs, AR aging',
+                  count: `${customers.length} shippers`,
+                  live: dbHealth?.tables.customers,
+                },
+                {
+                  name: 'company_profile',
+                  desc: `${companyForm.legalName} corporate registration, KRA PIN, I&M Bank settlement`,
+                  count: '1 corporate entity',
+                  live: dbHealth?.tables.company_profile,
+                },
+                {
+                  name: 'user_profile',
+                  desc: `${userForm.fullName} dispatch role, verified credentials, M-Pesa phone`,
+                  count: '1 active operator',
+                  live: dbHealth?.tables.user_profile,
+                },
+                {
+                  name: 'expenses',
+                  desc: 'Driver petty cash vouchers, fuel card receipts, workshop maintenance audits',
+                  count: 'Claim ledger',
+                  live: dbHealth?.tables.expenses,
+                },
+              ].map((table) => (
+                <div key={table.name} className="px-4 py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-label-code font-bold text-on-surface text-[13px]">
+                        public.{table.name}
+                      </span>
+                      <span className="font-label-code text-[10px] text-outline bg-surface-container px-1.5 py-0.5 rounded">
+                        {table.count}
+                      </span>
+                    </div>
+                    <p className="font-body-sm text-[11px] text-outline mt-0.5">
+                      {table.desc}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0">
+                    {table.live ? (
+                      <span className="inline-flex items-center gap-1 font-label-code text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-bold">
+                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                        Live & Synced
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 font-label-code text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full font-semibold">
+                        <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                        Ready in Schema
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* SQL Preview Box */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-label-sm text-[11px] text-outline font-semibold uppercase">
+                PostgreSQL DDL Migration Code Preview
+              </span>
+              <button
+                onClick={handleCopySql}
+                className="font-label-code text-[11px] text-primary hover:underline font-semibold flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[14px]">content_copy</span>
+                {copiedSql ? 'Copied' : 'Copy All SQL'}
+              </button>
+            </div>
+
+            <pre className="p-4 bg-slate-950 text-slate-200 rounded-2xl text-[11px] font-label-code overflow-x-auto max-h-64 leading-relaxed border border-slate-800 select-all">
+              {SUPABASE_SQL_SCHEMA}
+            </pre>
           </div>
         </div>
       )}

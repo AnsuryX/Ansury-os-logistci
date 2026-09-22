@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   NavigationPath,
   ReconcileTransaction,
@@ -36,6 +36,16 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { AnomaliesScreen } from './components/AnomaliesScreen';
 import { AICfoScreen } from './components/AICfoScreen';
 import { FinancialStatementsScreen } from './components/FinancialStatementsScreen';
+import {
+  fetchVehiclesFromSupabase,
+  fetchCustomersFromSupabase,
+  fetchCompanyProfileFromSupabase,
+  fetchUserProfileFromSupabase,
+  upsertVehicleToSupabase,
+  upsertCustomerToSupabase,
+  upsertCompanyProfileToSupabase,
+  upsertUserProfileToSupabase,
+} from './lib/supabase';
 
 export function App() {
   const [currentPath, setCurrentPath] = useState<NavigationPath>('overview');
@@ -57,13 +67,56 @@ export function App() {
   const [classificationTxn, setClassificationTxn] = useState<ReconcileTransaction | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
-  // Handlers for vehicles and customers
+  // Auto-hydrate state from Supabase if tables exist
+  useEffect(() => {
+    async function loadFromCloud() {
+      try {
+        const [cloudVehicles, cloudCustomers, cloudCompany, cloudUser] = await Promise.all([
+          fetchVehiclesFromSupabase(),
+          fetchCustomersFromSupabase(),
+          fetchCompanyProfileFromSupabase(),
+          fetchUserProfileFromSupabase(),
+        ]);
+
+        if (cloudVehicles && cloudVehicles.length > 0) {
+          setVehicles(cloudVehicles);
+        }
+        if (cloudCustomers && cloudCustomers.length > 0) {
+          setCustomers(cloudCustomers);
+        }
+        if (cloudCompany) {
+          setCompanyProfile(cloudCompany);
+        }
+        if (cloudUser) {
+          setUserProfile(cloudUser);
+        }
+      } catch (err) {
+        console.warn('Supabase auto-hydration using local fallback:', err);
+      }
+    }
+
+    loadFromCloud();
+  }, []);
+
+  // Handlers for vehicles and customers with Supabase background sync
   const handleAddVehicle = (newVehicle: Vehicle) => {
     setVehicles((prev) => [newVehicle, ...prev]);
+    upsertVehicleToSupabase(newVehicle).catch(() => {});
   };
 
   const handleAddCustomer = (newCustomer: Customer) => {
     setCustomers((prev) => [newCustomer, ...prev]);
+    upsertCustomerToSupabase(newCustomer).catch(() => {});
+  };
+
+  const handleUpdateCompany = (newCompany: CompanyProfile) => {
+    setCompanyProfile(newCompany);
+    upsertCompanyProfileToSupabase(newCompany).catch(() => {});
+  };
+
+  const handleUpdateUser = (newUser: UserProfile) => {
+    setUserProfile(newUser);
+    upsertUserProfileToSupabase(newUser).catch(() => {});
   };
 
   // Handlers for reconciliation
@@ -228,8 +281,10 @@ export function App() {
             <SettingsScreen
               companyProfile={companyProfile}
               userProfile={userProfile}
-              onUpdateCompanyProfile={setCompanyProfile}
-              onUpdateUserProfile={setUserProfile}
+              onUpdateCompanyProfile={handleUpdateCompany}
+              onUpdateUserProfile={handleUpdateUser}
+              vehicles={vehicles}
+              customers={customers}
             />
           )}
 
