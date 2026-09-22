@@ -14,6 +14,7 @@ export type NavigationPath =
   | 'profitability'
   | 'financial-statements'
   | 'ansury-ai-cfo'
+  | 'launch-qc'
   | 'settings';
 
 export interface Customer {
@@ -186,4 +187,60 @@ export interface TripEconomics {
   weighbridgeCessKes: number;
   accommodationKes: number;
   repairKes: number;
+}
+
+export interface InvoicePayment {
+  id: string;
+  date: string;
+  amount: number;
+  currency: 'USD' | 'KES';
+  method: 'SWIFT Wire' | 'RTGS' | 'M-PESA' | 'Cheque';
+  reference: string;
+  notes?: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  customerId: string;
+  customerName: string;
+  issueDate: string;
+  dueDate: string;
+  currency: 'USD' | 'KES';
+  totalAmount: number;
+  paidAmount: number;
+  remainingBalance: number;
+  status: 'draft' | 'issued' | 'partially_paid' | 'paid' | 'overdue' | 'refunded' | 'voided';
+  corridor: string;
+  waybillNumber: string;
+  truckReg: string;
+  cargoDescription: string;
+  ratePerTonneOrLitre?: number;
+  quantity?: number;
+  paymentHistory: InvoicePayment[];
+}
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actorName: string;
+  actorRole: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE_SOFT' | 'RECONCILE' | 'APPROVE' | 'REJECT' | 'REFUND' | 'OVERRIDE';
+  entityType: 'INVOICE' | 'EXPENSE' | 'BANK_TRANSACTION' | 'VEHICLE' | 'FLOAT_ALLOCATION' | 'SYSTEM_RULE';
+  entityId: string;
+  previousValue?: string;
+  newValue?: string;
+  reason?: string;
+  ipHash: string;
+}
+
+export interface StressTestCheck {
+  id: string;
+  category: 'Financial' | 'Fleet' | 'Security' | 'AI' | 'Operational';
+  name: string;
+  description: string;
+  formulaOrRule: string;
+  status: 'passed' | 'failed' | 'running';
+  liveProof: string;
+  details?: string;
 }

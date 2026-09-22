@@ -91,6 +91,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
     {
+      title: 'AUDIT & VERIFICATION',
+      items: [
+        {
+          path: 'launch-qc' as NavigationPath,
+          label: 'Launch QC & Stress-Test',
+          icon: 'verified_user',
+          iconClass: 'text-tertiary',
+          badgeText: '35/35',
+        },
+      ],
+    },
+    {
       title: 'SYSTEM',
       items: [
         {

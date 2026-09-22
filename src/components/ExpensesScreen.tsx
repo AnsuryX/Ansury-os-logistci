@@ -21,6 +21,9 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [activeAuditor, setActiveAuditor] = useState<'controller' | 'submitter'>('controller');
+  const [voidModalClaim, setVoidModalClaim] = useState<ExpenseClaim | null>(null);
+  const [voidReason, setVoidReason] = useState('');
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -74,6 +77,37 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Active Auditor Switcher for Policy SEC-04 Testing */}
+          <div className="bg-surface-container-low p-1 rounded-xl border border-[#dce9ff] flex items-center text-[11px]">
+            <span className="text-outline px-2 font-medium">Auditor Role:</span>
+            <button
+              onClick={() => {
+                setActiveAuditor('controller');
+                triggerToast('Active Role: David Kimani (Independent Controller) - Dual Approval Enabled');
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                activeAuditor === 'controller'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-outline hover:text-on-surface'
+              }`}
+            >
+              Independent Controller
+            </button>
+            <button
+              onClick={() => {
+                setActiveAuditor('submitter');
+                triggerToast('Active Role: Akbar Ahmed (Director & Submitter) - Self-Approval Block Active');
+              }}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                activeAuditor === 'submitter'
+                  ? 'bg-amber-700 text-white shadow-sm'
+                  : 'text-outline hover:text-on-surface'
+              }`}
+            >
+              Director (Submitter)
+            </button>
+          </div>
+
           <button
             onClick={() => triggerToast('Generating KRA Section 23 Fuel & Haulage Tax Schedule (PDF)...')}
             className="px-3.5 py-1.5 rounded-xl bg-surface-container-lowest border border-[#dce9ff] hover:bg-surface-container text-on-surface font-body-sm text-[12px] font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
@@ -323,6 +357,15 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
 
                   <div className="flex items-center gap-2">
                     <button
+                      onClick={() => setVoidModalClaim(claim)}
+                      className="px-2.5 py-1 rounded-lg text-outline hover:text-rose-600 font-body-sm text-[11px] font-semibold transition-colors flex items-center gap-1"
+                      title="Audited Void (Soft Delete with Reason)"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">delete</span>
+                      <span>Void</span>
+                    </button>
+
+                    <button
                       onClick={() => {
                         onRejectExpense(claim.id);
                         triggerToast(`Expense claim ${claim.claimNumber} rejected.`);
@@ -332,7 +375,15 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                       Reject
                     </button>
 
-                    {claim.missingReceipt ? (
+                    {activeAuditor === 'submitter' ? (
+                      <div
+                        className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-body-sm text-[11px] font-bold flex items-center gap-1 cursor-not-allowed"
+                        title="Policy SEC-04: Submitter cannot approve their own claim. Dual approval by Independent Controller required."
+                      >
+                        <span className="material-symbols-outlined text-[14px] text-amber-700">lock</span>
+                        <span>Self-Approval Prohibited</span>
+                      </div>
+                    ) : claim.missingReceipt ? (
                       <button
                         onClick={() => {
                           onHoldExpense(claim.id);
@@ -346,7 +397,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                       <button
                         onClick={() => {
                           onApproveExpense(claim.id);
-                          triggerToast(`Approved ${claim.claimNumber} (KES ${claim.amountKes.toLocaleString()}) for payment.`);
+                          triggerToast(`Approved ${claim.claimNumber} (KES ${claim.amountKes.toLocaleString()}) by Controller.`);
                         }}
                         className="px-3 py-1 rounded-lg bg-primary text-on-primary font-body-sm text-[12px] font-medium hover:bg-primary-container shadow-sm transition-all flex items-center gap-1"
                       >
@@ -468,6 +519,84 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           </div>
         </div>
       </div>
+
+      {/* AUDITED VOID / SOFT DELETE MODAL */}
+      {voidModalClaim && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl max-w-md w-full p-6 border border-rose-200 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e5eeff]">
+              <div>
+                <h3 className="font-headline-sm text-base font-bold text-rose-900 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-rose-600 text-[20px]">gavel</span>
+                  Audited Void / Soft Delete
+                </h3>
+                <p className="font-body-sm text-[12px] text-outline">
+                  Claim: {voidModalClaim.claimNumber} • KES {voidModalClaim.amountKes.toLocaleString()}
+                </p>
+              </div>
+              <button
+                onClick={() => setVoidModalClaim(null)}
+                className="p-1 rounded-lg hover:bg-surface-container text-outline"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-rose-50/60 rounded-xl border border-rose-200 text-[12px] text-rose-900 space-y-1">
+              <span className="font-bold block">Regulatory Audit Requirement:</span>
+              <p className="text-[11px] text-rose-800">
+                Financial records cannot be silently deleted. Voiding writes an immutable tombstone record in the audit trail recording your user ID, timestamp, and justification.
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!voidReason.trim()) {
+                  triggerToast('Error: Mandatory audit justification is required to void this claim.');
+                  return;
+                }
+                onRejectExpense(voidModalClaim.id);
+                triggerToast(`Claim ${voidModalClaim.claimNumber} voided with audit tombstone. Logged to immutable audit trail.`);
+                setVoidModalClaim(null);
+                setVoidReason('');
+              }}
+              className="space-y-3 text-[12px]"
+            >
+              <div>
+                <label className="block font-label-sm text-[11px] font-semibold text-outline uppercase mb-1">
+                  Mandatory Auditor Rationale *
+                </label>
+                <textarea
+                  rows={3}
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                  placeholder="Specify why this financial voucher is being voided (e.g. Duplicate fuel slip, incorrect fleet asset, merchant refund)..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface focus:outline-none focus:border-rose-600"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVoidModalClaim(null)}
+                  className="px-4 py-2 rounded-xl bg-surface-container-low text-on-surface hover:bg-surface-container font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition-all shadow-sm flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[16px]">verified</span>
+                  Record Audited Void
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

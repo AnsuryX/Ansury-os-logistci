@@ -33,6 +33,26 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
   const quickItems = [
     {
+      title: 'Launch QC & Stress-Test Suite',
+      subtitle: '35-Point Automated Launch Verification & Proof Engine',
+      category: 'Audit & Verification',
+      icon: 'verified_user',
+      action: () => {
+        onNavigate('launch-qc');
+        onClose();
+      },
+    },
+    {
+      title: 'Invoices & Accounts Receivable (AR)',
+      subtitle: 'Manage freight invoices, partial payments, credit terms & aging',
+      category: 'Finance',
+      icon: 'request_quote',
+      action: () => {
+        onNavigate('invoices-ar');
+        onClose();
+      },
+    },
+    {
       title: 'KDA 542T • Mercedes Actros 2640',
       subtitle: 'Nairobi → Kampala • +14.2% Fuel Spike Telemetry Alert',
       category: 'Fleet & Anomaly',

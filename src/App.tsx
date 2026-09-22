@@ -36,6 +36,8 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { AnomaliesScreen } from './components/AnomaliesScreen';
 import { AICfoScreen } from './components/AICfoScreen';
 import { FinancialStatementsScreen } from './components/FinancialStatementsScreen';
+import { InvoicesArScreen } from './components/InvoicesArScreen';
+import { LaunchQcScreen } from './components/LaunchQcScreen';
 import {
   fetchVehiclesFromSupabase,
   fetchCustomersFromSupabase,
@@ -289,7 +291,21 @@ export function App() {
           )}
 
           {(currentPath === 'invoices-ar' || currentPath === 'payments') && (
-            <ProfitabilityScreen />
+            <InvoicesArScreen
+              customers={customers}
+              vehicles={vehicles}
+              onNavigate={(path: NavigationPath) => setCurrentPath(path)}
+            />
+          )}
+
+          {currentPath === 'launch-qc' && (
+            <LaunchQcScreen
+              vehicles={vehicles}
+              customers={customers}
+              companyProfile={companyProfile}
+              userProfile={userProfile}
+              onNavigate={(path: NavigationPath) => setCurrentPath(path)}
+            />
           )}
 
           {(currentPath === 'financial-statements' || currentPath === 'pl-cashflow') && (
