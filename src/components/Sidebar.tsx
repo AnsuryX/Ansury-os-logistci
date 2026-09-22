@@ -90,6 +90,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
       ],
     },
+    {
+      title: 'SYSTEM',
+      items: [
+        {
+          path: 'settings' as NavigationPath,
+          label: 'Settings & Company',
+          icon: 'settings',
+        },
+      ],
+    },
   ];
 
   return (

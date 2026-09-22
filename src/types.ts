@@ -13,7 +13,56 @@ export type NavigationPath =
   | 'pl-cashflow'
   | 'profitability'
   | 'financial-statements'
-  | 'ansury-ai-cfo';
+  | 'ansury-ai-cfo'
+  | 'settings';
+
+export interface Customer {
+  id: string;
+  name: string;
+  tinNumber: string;
+  corridor: string;
+  cargoType: string;
+  contactPerson: string;
+  phone: string;
+  email: string;
+  billingCurrency: 'USD' | 'KES' | 'UGX';
+  totalVolumeTonnes: number;
+  totalRevenueUsd: number;
+  outstandingArUsd: number;
+  creditDays: number;
+  activeTrips: number;
+  status: 'Contract Active' | 'Pending Renewal' | 'On Hold';
+  location: string;
+  contractExpiry: string;
+}
+
+export interface CompanyProfile {
+  legalName: string;
+  tradingName: string;
+  registrationCity: string;
+  taxPin: string;
+  bankName: string;
+  bankBic: string;
+  accountNumber: string;
+  ibanMasked: string;
+  defaultCurrency: 'USD' | 'KES';
+  exchangeRateKesPerUsd: number;
+  hqAddress: string;
+  keyDirector: string;
+  directorId: string;
+  keyShareholder: string;
+}
+
+export interface UserProfile {
+  fullName: string;
+  email: string;
+  role: string;
+  phone: string;
+  location: string;
+  avatarUrl?: string;
+  notificationsEnabled: boolean;
+  smsAlertsEnabled: boolean;
+}
 
 export interface RealBankTransaction {
   id: string;

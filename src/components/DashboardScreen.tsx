@@ -5,12 +5,16 @@ interface DashboardScreenProps {
   vehicles: Vehicle[];
   onNavigate: (path: NavigationPath) => void;
   onOpenQuickExpense: () => void;
+  userName?: string;
+  companyName?: string;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   vehicles,
   onNavigate,
   onOpenQuickExpense,
+  userName = 'David Kimani',
+  companyName = 'BEYAYAN LIMITED',
 }) => {
   const [selectedPeriod, setSelectedPeriod] = useState<'Today' | '7 Days' | 'This Month' | 'Last Month' | 'Custom'>('This Month');
   const [fleetSearch, setFleetSearch] = useState('');
@@ -102,10 +106,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="font-headline-lg text-2xl font-bold text-on-surface tracking-tight">
-              Good morning, David
+              Good morning, {userName.split(' ')[0]}
             </h1>
             <span className="font-label-code text-[11px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full border border-primary/20">
-              HQ FLIGHT DECK
+              {companyName} • FLIGHT DECK
             </span>
           </div>
           <p className="font-body-md text-[13px] text-outline mt-0.5">

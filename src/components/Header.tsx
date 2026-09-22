@@ -2,14 +2,29 @@ import React, { useState } from 'react';
 
 interface HeaderProps {
   onOpenCommandPalette: () => void;
+  onNavigateSettings?: () => void;
   notificationCount?: number;
+  companyName?: string;
+  accountNumber?: string;
+  userName?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenCommandPalette,
+  onNavigateSettings,
   notificationCount = 3,
+  companyName = 'BEYAYAN LIMITED',
+  accountNumber = '01306297851250',
+  userName = 'David Kimani',
 }) => {
   const [showNotifications, setShowNotifications] = useState(false);
+
+  const initials = userName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
 
   return (
     <header className="fixed top-0 left-64 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#eff4ff] flex items-center justify-between px-space-lg">
@@ -106,18 +121,39 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
+        {/* Settings Button */}
+        {onNavigateSettings && (
+          <button
+            aria-label="Settings"
+            onClick={onNavigateSettings}
+            className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors flex items-center gap-1"
+            title="Settings & Corporate Administration"
+          >
+            <span className="material-symbols-outlined text-[20px]">settings</span>
+            <span className="hidden md:inline font-body-sm text-[12px] font-semibold text-outline hover:text-primary">
+              Settings
+            </span>
+          </button>
+        )}
+
         {/* Company & Profile Info */}
-        <div className="flex items-center gap-2.5 pl-2 border-l border-[#e5eeff]">
+        <div
+          onClick={onNavigateSettings}
+          className={`flex items-center gap-2.5 pl-2 border-l border-[#e5eeff] ${
+            onNavigateSettings ? 'cursor-pointer hover:opacity-85 transition-opacity' : ''
+          }`}
+          title="Click to view and edit company and user details"
+        >
           <div className="flex flex-col text-right hidden sm:flex">
             <span className="font-headline-sm text-[13px] text-on-surface leading-tight truncate max-w-[200px] font-bold">
-              BEYAYAN LIMITED
+              {companyName}
             </span>
             <span className="font-label-sm text-[11px] text-outline">
-              I&M A/C 01306297851250
+              I&M A/C {accountNumber}
             </span>
           </div>
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm text-white font-bold text-[13px]">
-            BL
+            {initials}
           </div>
         </div>
       </div>

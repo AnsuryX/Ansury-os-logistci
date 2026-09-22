@@ -1,10 +1,23 @@
 import React, { useState } from 'react';
-import { NavigationPath, ReconcileTransaction, ExpenseClaim } from './types';
+import {
+  NavigationPath,
+  ReconcileTransaction,
+  ExpenseClaim,
+  Vehicle,
+  Customer,
+  CompanyProfile,
+  UserProfile,
+} from './types';
 import {
   INITIAL_VEHICLES,
   INITIAL_RECONCILIATION_TXNS,
   INITIAL_EXPENSES,
 } from './data/mockData';
+import {
+  INITIAL_CUSTOMERS,
+  INITIAL_COMPANY_PROFILE,
+  INITIAL_USER_PROFILE,
+} from './data/mockCustomers';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
@@ -18,13 +31,19 @@ import { ExpensesScreen } from './components/ExpensesScreen';
 import { ProfitabilityScreen } from './components/ProfitabilityScreen';
 import { TripsScreen } from './components/TripsScreen';
 import { FleetScreen } from './components/FleetScreen';
+import { CustomersScreen } from './components/CustomersScreen';
+import { SettingsScreen } from './components/SettingsScreen';
 import { AnomaliesScreen } from './components/AnomaliesScreen';
 import { AICfoScreen } from './components/AICfoScreen';
 import { FinancialStatementsScreen } from './components/FinancialStatementsScreen';
 
 export function App() {
   const [currentPath, setCurrentPath] = useState<NavigationPath>('overview');
-  const [vehicles] = useState(INITIAL_VEHICLES);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
+  const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(INITIAL_COMPANY_PROFILE);
+  const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
+
   const [reconcileTxns, setReconcileTxns] = useState<ReconcileTransaction[]>(
     INITIAL_RECONCILIATION_TXNS
   );
@@ -37,6 +56,15 @@ export function App() {
   const [receiptAuditClaim, setReceiptAuditClaim] = useState<ExpenseClaim | null>(null);
   const [classificationTxn, setClassificationTxn] = useState<ReconcileTransaction | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // Handlers for vehicles and customers
+  const handleAddVehicle = (newVehicle: Vehicle) => {
+    setVehicles((prev) => [newVehicle, ...prev]);
+  };
+
+  const handleAddCustomer = (newCustomer: Customer) => {
+    setCustomers((prev) => [newCustomer, ...prev]);
+  };
 
   // Handlers for reconciliation
   const handleConfirmMatch = (id: string) => {
@@ -119,7 +147,11 @@ export function App() {
         {/* Top Header */}
         <Header
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onNavigateSettings={() => setCurrentPath('settings')}
           notificationCount={anomaliesCount}
+          companyName={companyProfile.legalName}
+          accountNumber={companyProfile.accountNumber}
+          userName={userProfile.fullName}
         />
 
         {/* Dynamic Route View (offset by Header height 16 = 4rem = 64px) */}
@@ -129,6 +161,8 @@ export function App() {
               vehicles={vehicles}
               onNavigate={(path) => setCurrentPath(path)}
               onOpenQuickExpense={() => setIsQuickExpenseOpen(true)}
+              userName={userProfile.fullName}
+              companyName={companyProfile.legalName}
             />
           )}
 
@@ -158,10 +192,46 @@ export function App() {
 
           {currentPath === 'trips' && <TripsScreen />}
 
-          {(currentPath === 'vehicles-fleet' ||
-            currentPath === 'drivers' ||
-            currentPath === 'customers' ||
-            currentPath === 'fuel-control') && <FleetScreen vehicles={vehicles} />}
+          {currentPath === 'vehicles-fleet' && (
+            <FleetScreen
+              vehicles={vehicles}
+              onAddVehicle={handleAddVehicle}
+              viewMode="fleet"
+            />
+          )}
+
+          {currentPath === 'drivers' && (
+            <FleetScreen
+              vehicles={vehicles}
+              onAddVehicle={handleAddVehicle}
+              viewMode="drivers"
+            />
+          )}
+
+          {currentPath === 'fuel-control' && (
+            <FleetScreen
+              vehicles={vehicles}
+              onAddVehicle={handleAddVehicle}
+              viewMode="fuel"
+            />
+          )}
+
+          {currentPath === 'customers' && (
+            <CustomersScreen
+              customers={customers}
+              onAddCustomer={handleAddCustomer}
+              onNavigateToStatements={() => setCurrentPath('financial-statements')}
+            />
+          )}
+
+          {currentPath === 'settings' && (
+            <SettingsScreen
+              companyProfile={companyProfile}
+              userProfile={userProfile}
+              onUpdateCompanyProfile={setCompanyProfile}
+              onUpdateUserProfile={setUserProfile}
+            />
+          )}
 
           {(currentPath === 'invoices-ar' || currentPath === 'payments') && (
             <ProfitabilityScreen />
