@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavigationPath } from '../types';
 import { LOGO_URL } from '../data/mockData';
+import { useAuth } from '../lib/auth';
+import { ROLE_METADATA } from '../lib/permissions';
 
 interface NavItem {
   path: NavigationPath;
@@ -20,13 +22,20 @@ interface SidebarProps {
   currentPath: NavigationPath;
   onNavigate: (path: NavigationPath) => void;
   pendingAnomaliesCount?: number;
+  activeVehiclesCount?: number;
+  totalVehiclesCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentPath,
   onNavigate,
-  pendingAnomaliesCount = 3,
+  pendingAnomaliesCount = 0,
+  activeVehiclesCount = 10,
+  totalVehiclesCount = 12,
 }) => {
+  const { user, role, permissions, signOut } = useAuth();
+  const roleMeta = ROLE_METADATA[role];
+
   const navSections: NavSection[] = [
     {
       title: 'OVERVIEW',
@@ -100,11 +109,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
           iconClass: 'text-tertiary',
           badgeText: '35/35',
         },
+        ...(permissions.canViewAuditLogs
+          ? [
+              {
+                path: 'audit-logs' as NavigationPath,
+                label: 'Audit Log Trail',
+                icon: 'history_edu',
+                iconClass: 'text-primary',
+                badgeText: 'SEC-04',
+              },
+            ]
+          : []),
       ],
     },
     {
       title: 'SYSTEM',
       items: [
+        ...(permissions.canManageUsers
+          ? [
+              {
+                path: 'user-management' as NavigationPath,
+                label: 'User Management',
+                icon: 'manage_accounts',
+                iconClass: 'text-primary',
+                badgeText: 'SEC-01',
+              },
+            ]
+          : []),
         {
           path: 'settings' as NavigationPath,
           label: 'Settings & Company',
@@ -139,6 +170,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Driver Mode Banner */}
+      {role === 'driver' && (
+        <div className="mx-2 mt-2 px-3 py-1.5 rounded-xl bg-slate-900 text-white flex items-center gap-2 border border-slate-700">
+          <span className="material-symbols-outlined text-amber-400 text-[16px]">visibility</span>
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+              Driver Mode (Read-Only)
+            </div>
+            <div className="text-[10px] text-slate-300 truncate">
+              {user?.assignedTruck ? `Asset: ${user.assignedTruck}` : 'Northern Corridor'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Navigation List */}
       <div className="flex-1 overflow-y-auto px-space-sm py-space-sm space-y-3">
@@ -200,7 +246,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Telemetry Status Footer */}
-      <div className="p-space-sm bg-surface-container-low border-t border-[#e5eeff]">
+      <div className="p-space-sm bg-surface-container-low border-t border-[#e5eeff] space-y-2">
         <div className="flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)]">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
@@ -209,8 +255,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </div>
           <span className="font-label-code text-[11px] text-tertiary font-bold">
-            48/52 Active
+            {activeVehiclesCount}/{totalVehiclesCount} Active
           </span>
+        </div>
+
+        {/* Current Operator & Sign Out */}
+        <div className="p-2 rounded-lg bg-white border border-[#e5eeff] flex items-center justify-between">
+          <div className="min-w-0 pr-1">
+            <div className="text-[11px] font-bold text-slate-900 truncate">
+              {user?.fullName || 'Operator'}
+            </div>
+            <div className="text-[10px] text-primary font-semibold truncate">
+              {roleMeta?.badgeTitle || role}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => signOut()}
+            title="Sign Out of Ansury OS"
+            className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">logout</span>
+          </button>
         </div>
       </div>
     </aside>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Vehicle } from '../types';
+import { safeInitials, uniqueId } from '../utils/format';
 
 interface AddVehicleModalProps {
   isOpen: boolean;
@@ -35,20 +36,15 @@ export const AddVehicleModal: React.FC<AddVehicleModalProps> = ({
     }
 
     const driverName = driver.trim();
-    const initials = driverName
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    const initials = safeInitials(driverName);
 
     const newVehicle: Vehicle = {
-      id: `veh-${Date.now()}`,
+      id: uniqueId('veh'),
       reg: reg.trim().toUpperCase(),
       makeModel,
       driver: driverName,
       driverId: `DRV-${Math.floor(100 + Math.random() * 900)}`,
-      driverInitials: initials || 'DR',
+      driverInitials: initials,
       corridor,
       tripCode: `TRP-0${Math.floor(200 + Math.random() * 800)}`,
       tripLocation: 'Mombasa Port Gate 14 (Dispatched)',

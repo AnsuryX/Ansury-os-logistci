@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import { safeInitials } from '../utils/format';
+import { useAuth, DEMO_USERS } from '../lib/auth';
+import { AppRole, ROLE_METADATA } from '../lib/permissions';
 
 interface HeaderProps {
   onOpenCommandPalette: () => void;
@@ -7,6 +10,7 @@ interface HeaderProps {
   companyName?: string;
   accountNumber?: string;
   userName?: string;
+  exchangeRate?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,16 +19,16 @@ export const Header: React.FC<HeaderProps> = ({
   notificationCount = 3,
   companyName = 'BEYAYAN LIMITED',
   accountNumber = '01306297851250',
-  userName = 'David Kimani',
+  userName,
+  exchangeRate = 127.20,
 }) => {
+  const { user, role, switchPersona } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showPersonaMenu, setShowPersonaMenu] = useState(false);
 
-  const initials = userName
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const activeName = user?.fullName || userName || 'David Kimani';
+  const initials = safeInitials(activeName);
+  const roleMeta = ROLE_METADATA[role];
 
   return (
     <header className="fixed top-0 left-64 right-0 h-16 bg-surface-container-lowest/90 backdrop-blur-xl z-40 shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-b border-[#eff4ff] flex items-center justify-between px-space-lg">
@@ -65,7 +69,7 @@ export const Header: React.FC<HeaderProps> = ({
             USD / KES
           </span>
           <span className="font-label-sm text-[11px] text-outline hidden md:inline">
-            1 USD = 127.20 KSh
+            1 USD = {exchangeRate.toFixed(2)} KES
           </span>
         </div>
 
@@ -137,24 +141,87 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Company & Profile Info */}
-        <div
-          onClick={onNavigateSettings}
-          className={`flex items-center gap-2.5 pl-2 border-l border-[#e5eeff] ${
-            onNavigateSettings ? 'cursor-pointer hover:opacity-85 transition-opacity' : ''
-          }`}
-          title="Click to view and edit company and user details"
-        >
-          <div className="flex flex-col text-right hidden sm:flex">
-            <span className="font-headline-sm text-[13px] text-on-surface leading-tight truncate max-w-[200px] font-bold">
-              {companyName}
-            </span>
-            <span className="font-label-sm text-[11px] text-outline">
-              I&M A/C {accountNumber}
-            </span>
+        <div className="relative">
+          <div
+            onClick={() => setShowPersonaMenu(!showPersonaMenu)}
+            className="flex items-center gap-2 pl-2 border-l border-[#e5eeff] cursor-pointer hover:opacity-85 transition-opacity"
+            title="Click to view role and switch persona"
+          >
+            <div className="flex flex-col text-right hidden sm:flex">
+              <span className="font-headline-sm text-[12px] text-on-surface leading-tight truncate max-w-[180px] font-bold">
+                {activeName}
+              </span>
+              <span className="font-label-code text-[10px] text-primary font-bold">
+                {roleMeta?.badgeTitle || role}
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm text-white font-bold text-[13px]">
+              {initials}
+            </div>
           </div>
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm text-white font-bold text-[13px]">
-            {initials}
-          </div>
+
+          {/* Persona Quick Switcher Dropdown */}
+          {showPersonaMenu && (
+            <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="border-b border-slate-100 pb-2 mb-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Switch Active Persona (SEC-01)
+                </div>
+                <div className="text-xs text-slate-700 font-semibold truncate mt-0.5">
+                  Logged in as {activeName}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                {(Object.keys(DEMO_USERS) as AppRole[]).map((rKey) => {
+                  const p = DEMO_USERS[rKey];
+                  const m = ROLE_METADATA[rKey];
+                  const isCurrent = role === rKey;
+
+                  return (
+                    <button
+                      key={rKey}
+                      type="button"
+                      onClick={() => {
+                        switchPersona(rKey);
+                        setShowPersonaMenu(false);
+                      }}
+                      className={`w-full text-left p-2 rounded-xl transition-all flex items-center justify-between text-xs ${
+                        isCurrent
+                          ? 'bg-primary/10 text-primary font-bold'
+                          : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div className="min-w-0 pr-1">
+                        <div className="truncate">{p.fullName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono truncate">{m.label}</div>
+                      </div>
+                      {isCurrent && (
+                        <span className="material-symbols-outlined text-[16px] text-primary">
+                          check_circle
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {onNavigateSettings && (
+                <div className="pt-2 mt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPersonaMenu(false);
+                      onNavigateSettings();
+                    }}
+                    className="w-full text-center py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors"
+                  >
+                    Open Settings & Profile
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -1,37 +1,110 @@
 import React, { useState } from 'react';
+import { ReconcileTransaction } from '../types';
 
 interface ImportCsvModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportComplete: (count: number) => void;
+  onImportTransactions: (txns: ReconcileTransaction[], filename: string) => void;
 }
+
+const DEFAULT_SAMPLE_CSV = `Receipt No,Completion Time,Details / Merchant,Paid Out (KES),Paid In (KES),Truck Plate
+QK829J21NA,2026-09-24 08:30:15,Shell Eldoret North Junction,18500,0,KDA 542T
+QK829J44KC,2026-09-24 10:14:02,TotalEnergies Mau Summit Bypass,24200,0,KDA 543U
+QK829J99MP,2026-09-24 12:45:22,Malaba OSBP Border Transit Permit,9800,0,KCG 891B
+QK829K01TR,2026-09-24 15:20:10,Equator Tyres Nakuru Alignment,14500,0,KDA 542T
+QK829K19BZ,2026-09-25 09:05:44,Rubis Energy Webuye Weighbridge,21000,0,KCD 104M
+QK829K33ZX,2026-09-25 11:30:00,KenolKobil Gilgil Corridor Hub,16800,0,KDF 221P
+QK829K77AA,2026-09-25 14:10:18,Safaricom B2C Driver Allowance Disbursed,12000,0,KDA 542T
+QK829K88BB,2026-09-25 16:45:00,Busia OSBP Clearance Toll Receipt,7500,0,KCG 891B`;
 
 export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
   isOpen,
   onClose,
-  onImportComplete,
+  onImportTransactions,
 }) => {
-  const [fileSelected, setFileSelected] = useState<string | null>(
-    'safaricom_till_statement_sept2025.csv'
-  );
+  const [fileName, setFileName] = useState<string>('safaricom_daraja_b2c_sept2026.csv');
+  const [csvContent, setCsvContent] = useState<string>(DEFAULT_SAMPLE_CSV);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [deduplicate, setDeduplicate] = useState(true);
+  const [autoLinkPlate, setAutoLinkPlate] = useState(true);
 
   if (!isOpen) return null;
 
+  const parseCsvLines = (content: string): ReconcileTransaction[] => {
+    const lines = content.trim().split('\n');
+    if (lines.length <= 1) return [];
+
+    const parsed: ReconcileTransaction[] = [];
+    // Skip header line
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const cols = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+      if (cols.length < 4) continue;
+
+      const ref = cols[0] || `TXN-CSV-${Date.now()}-${i}`;
+      const dateTime = cols[1] || '2026-09-25 12:00:00';
+      const [datePart, timePart] = dateTime.split(' ');
+      const merchant = cols[2] || 'Corridor Service Provider';
+      const paidOut = parseFloat(cols[3]) || 0;
+      const paidIn = parseFloat(cols[4]) || 0;
+      const amount = paidOut > 0 ? paidOut : paidIn;
+      const type = paidOut > 0 ? ('debit' as const) : ('credit' as const);
+      const plate = cols[5] || 'KDA 542T';
+
+      parsed.push({
+        id: `csv-${ref.toLowerCase()}-${i}`,
+        date: datePart || '2026-09-25',
+        time: timePart || '12:00 EAT',
+        ref,
+        source: 'Safaricom B2C',
+        merchantOrParty: merchant,
+        amountKes: amount,
+        type,
+        status: 'review',
+        confidenceType: 'high',
+        erpTitle: autoLinkPlate && plate ? `Corridor Outlay (${plate})` : 'Disbursement Pending Sub-Ledger',
+        erpSubtitle: `Ingested from ${fileName} • Statement ref ${ref}`,
+      });
+    }
+
+    return parsed;
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        setCsvContent(text);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const handleRunPipeline = () => {
     setIsProcessing(true);
+
     setTimeout(() => {
+      const parsedTxns = parseCsvLines(csvContent);
+      onImportTransactions(parsedTxns, fileName);
       setIsProcessing(false);
-      onImportComplete(18);
       onClose();
-    }, 1200);
+    }, 800);
   };
+
+  const lineCount = parseCsvLines(csvContent).length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-on-background/50 backdrop-blur-sm"
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
       ></div>
 
@@ -44,10 +117,10 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
             </span>
             <div>
               <span className="font-headline-sm text-headline-sm text-on-surface font-semibold">
-                Statement CSV Ingestion & Column Mapper
+                Statement CSV Ingestion & Persistence Engine
               </span>
               <p className="font-label-sm text-[11px] text-outline">
-                Safaricom Daraja / KCB / Equity Bulk Export Feed
+                Safaricom Daraja B2C / I&M Bank / Equity Corporate Bulk Export
               </p>
             </div>
           </div>
@@ -69,24 +142,21 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
               </span>
               <div>
                 <div className="font-body-sm text-[13px] font-semibold text-on-surface">
-                  {fileSelected}
+                  {fileName}
                 </div>
                 <div className="font-label-code text-[11px] text-outline">
-                  184 KB • 18 unmapped transactions detected
+                  {lineCount} valid corridor transactions ready for database persistence
                 </div>
               </div>
             </div>
-            <label className="text-[12px] text-primary font-semibold cursor-pointer hover:underline">
-              Replace
+            <label className="text-[12px] text-primary font-semibold cursor-pointer hover:underline flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-[#dce9ff] shadow-sm">
+              <span className="material-symbols-outlined text-[16px]">folder_open</span>
+              <span>Upload CSV</span>
               <input
                 type="file"
-                accept=".csv,.xlsx"
+                accept=".csv,text/csv"
                 className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setFileSelected(e.target.files[0].name);
-                  }
-                }}
+                onChange={handleFileUpload}
               />
             </label>
           </div>
@@ -95,14 +165,15 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="font-label-sm text-[11px] text-outline uppercase font-semibold">
-                Auto-Detected Column Alignments
+                Detected Column Alignments & Data Types
               </span>
-              <span className="font-label-code text-[10px] text-tertiary bg-emerald-50 px-2 py-0.5 rounded font-bold">
-                100% Schema Confidence
+              <span className="font-label-code text-[10px] text-tertiary bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                100% Schema Matched
               </span>
             </div>
 
-            <div className="space-y-2 text-body-sm text-[12px]">
+            <div className="space-y-1.5 text-body-sm text-[12px]">
               <div className="flex items-center justify-between p-2 bg-surface-container-low rounded-lg">
                 <span className="text-on-surface-variant font-medium">Receipt No / Trans ID</span>
                 <span className="font-label-code font-bold text-on-surface">Column A (e.g. QK829J21NA)</span>
@@ -112,12 +183,16 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
                 <span className="font-label-code font-bold text-on-surface">Column B (ISO 8601 EAT)</span>
               </div>
               <div className="flex items-center justify-between p-2 bg-surface-container-low rounded-lg">
-                <span className="text-on-surface-variant font-medium">Details / Merchant Info</span>
-                <span className="font-label-code font-bold text-on-surface">Column C (Shell Eldoret Paybill)</span>
+                <span className="text-on-surface-variant font-medium">Details / Service Station</span>
+                <span className="font-label-code font-bold text-on-surface">Column C (Shell Eldoret, Rubis)</span>
               </div>
               <div className="flex items-center justify-between p-2 bg-surface-container-low rounded-lg">
-                <span className="text-on-surface-variant font-medium">Paid In / Out (KES)</span>
-                <span className="font-label-code font-bold text-on-surface">Column E (Numeric)</span>
+                <span className="text-on-surface-variant font-medium">Paid Out / Paid In (KES)</span>
+                <span className="font-label-code font-bold text-on-surface">Column D/E (Numeric)</span>
+              </div>
+              <div className="flex items-center justify-between p-2 bg-surface-container-low rounded-lg">
+                <span className="text-on-surface-variant font-medium">Truck Asset Plate</span>
+                <span className="font-label-code font-bold text-primary">Column F (e.g. KDA 542T)</span>
               </div>
             </div>
           </div>
@@ -125,41 +200,50 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
           {/* Options */}
           <div className="space-y-2 pt-2 border-t border-[#e5eeff]">
             <label className="flex items-center gap-2 text-body-sm text-[12px] text-on-surface cursor-pointer">
-              <input type="checkbox" defaultChecked className="rounded text-primary focus:ring-primary" />
-              <span>Ignore previously settled transactions (Deduplicate via Ref Code)</span>
+              <input
+                type="checkbox"
+                checked={deduplicate}
+                onChange={(e) => setDeduplicate(e.target.checked)}
+                className="rounded text-primary focus:ring-primary"
+              />
+              <span>Ignore previously settled transactions (Deduplicate via Receipt Ref)</span>
             </label>
             <label className="flex items-center gap-2 text-body-sm text-[12px] text-on-surface cursor-pointer">
-              <input type="checkbox" defaultChecked className="rounded text-primary focus:ring-primary" />
-              <span>Auto-link Fleet Plate numbers detected in Account Reference fields</span>
+              <input
+                type="checkbox"
+                checked={autoLinkPlate}
+                onChange={(e) => setAutoLinkPlate(e.target.checked)}
+                className="rounded text-primary focus:ring-primary"
+              />
+              <span>Auto-link Fleet Plate numbers into ERP sub-ledger title</span>
             </label>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="p-space-md bg-surface-container-low flex items-center justify-end gap-2 border-t border-[#e5eeff]">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-surface-container text-on-surface font-body-md text-[13px] hover:bg-surface-container-high transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleRunPipeline}
-            disabled={isProcessing}
-            className="px-4 py-2 rounded-lg bg-primary text-on-primary font-body-md text-[13px] font-medium hover:bg-primary-container shadow-sm transition-all flex items-center gap-2 disabled:opacity-75"
-          >
-            {isProcessing ? (
-              <>
-                <span className="material-symbols-outlined text-[16px] animate-spin">refresh</span>
-                <span>Ingesting Feed...</span>
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-[16px]">play_arrow</span>
-                <span>Run Pipeline & Match</span>
-              </>
-            )}
-          </button>
+        <div className="p-space-md bg-surface-container-low flex items-center justify-between border-t border-[#e5eeff]">
+          <span className="text-[11px] font-label-code text-outline">
+            {lineCount} rows to ingest into <strong>reconciliation_txns</strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              disabled={isProcessing}
+              className="px-3.5 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface hover:bg-surface-container font-semibold text-[12px] transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRunPipeline}
+              disabled={isProcessing || lineCount === 0}
+              className="px-5 py-2 rounded-xl bg-primary text-white hover:bg-primary-container font-semibold text-[12px] shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <span className={`material-symbols-outlined text-[16px] ${isProcessing ? 'animate-spin' : ''}`}>
+                {isProcessing ? 'sync' : 'cloud_upload'}
+              </span>
+              <span>{isProcessing ? 'Persisting to Database...' : 'Ingest & Persist Records'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavigationPath, Vehicle } from '../types';
+import { downloadCsv } from '../utils/format';
 
 interface DashboardScreenProps {
   vehicles: Vehicle[];
@@ -91,6 +92,25 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       v.corridor.toLowerCase().includes(fleetSearch.toLowerCase())
   );
 
+  const handleExportReport = () => {
+    const rows = [
+      ['Registration', 'Make & Model', 'Driver', 'Status', 'Corridor', 'Actual km/L', 'Target km/L', 'Distance (km)', 'Fuel Cost (KES)'],
+      ...vehicles.map((v) => [
+        v.reg,
+        v.makeModel,
+        v.driver,
+        v.status,
+        v.corridor,
+        v.actualKmL.toFixed(2),
+        v.targetKmL.toFixed(2),
+        v.distanceKm.toString(),
+        v.fuelCostKes.toString(),
+      ]),
+    ];
+    downloadCsv(`ansury-fleet-executive-report-${new Date().toISOString().split('T')[0]}.csv`, rows);
+    triggerToast(`Exported ${vehicles.length} fleet asset records to CSV!`);
+  };
+
   return (
     <div className="p-space-lg space-y-space-lg pb-16">
       {/* Toast popup */}
@@ -137,7 +157,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
           {/* Action Buttons */}
           <button
-            onClick={() => triggerToast('Generating Executive Haulage Report (PDF & Excel)...')}
+            onClick={handleExportReport}
             className="px-3.5 py-1.5 rounded-xl bg-surface-container-lowest border border-[#dce9ff] hover:bg-surface-container text-on-surface font-body-sm text-[12px] font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
           >
             <span className="material-symbols-outlined text-[16px]">file_download</span>
@@ -179,7 +199,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </span>
               </div>
               <span className="font-label-code text-[11px] text-outline">
-                COMPUTED AGAINST 52 ACTIVE ASSETS • RUN ID: AI-NBI-8021
+                COMPUTED AGAINST {vehicles.length} ACTIVE ASSETS • RUN ID: AI-NBI-8021
               </span>
             </div>
           </div>
@@ -620,7 +640,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 FLEET TELEMETRY & TRIP PERFORMANCE
               </h2>
               <span className="font-label-code text-[11px] bg-surface-container text-on-surface-variant px-2 py-0.5 rounded font-bold">
-                52 Prime Movers Total
+                {vehicles.length} Fleet Assets Total
               </span>
             </div>
             <p className="font-body-sm text-[12px] text-outline mt-0.5">
@@ -774,15 +794,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
         {/* Table Footer */}
         <div className="p-3 bg-surface-container-low border-t border-[#e5eeff] flex items-center justify-between text-[11px] text-outline">
-          <span>Showing 5 of 52 Active Fleet Assets • CANBUS IoT Gateway Online</span>
+          <span>Showing {filteredVehicles.length} of {vehicles.length} Fleet Assets • CANBUS Telemetry Gateway Online</span>
           <div className="flex items-center gap-2">
-            <button className="px-2 py-1 bg-surface-container rounded hover:bg-surface-container-high text-on-surface">
-              Previous
-            </button>
-            <span className="font-label-code font-bold text-on-surface">Page 1 of 11</span>
-            <button className="px-2 py-1 bg-surface-container rounded hover:bg-surface-container-high text-on-surface">
-              Next 5 Vehicles
-            </button>
+            <span className="font-label-code font-bold text-on-surface">All {filteredVehicles.length} Assets Loaded</span>
           </div>
         </div>
       </div>

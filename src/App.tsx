@@ -7,6 +7,10 @@ import {
   Customer,
   CompanyProfile,
   UserProfile,
+  Invoice,
+  InvoicePayment,
+  AuditLogEntry,
+  AppUser,
 } from './types';
 import {
   INITIAL_VEHICLES,
@@ -18,8 +22,12 @@ import {
   INITIAL_COMPANY_PROFILE,
   INITIAL_USER_PROFILE,
 } from './data/mockCustomers';
+import { INITIAL_INVOICES, INITIAL_AUDIT_LOGS } from './data/mockInvoices';
+import { AuthProvider, useAuth, DEMO_USERS } from './lib/auth';
+import { canAccessRoute, AppRole, ROLE_METADATA } from './lib/permissions';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { LoginScreen } from './components/LoginScreen';
 import { CommandPaletteModal } from './components/CommandPaletteModal';
 import { QuickExpenseDrawer } from './components/QuickExpenseDrawer';
 import { ReceiptAuditModal } from './components/ReceiptAuditModal';
@@ -28,6 +36,7 @@ import { ImportCsvModal } from './components/ImportCsvModal';
 import { DashboardScreen } from './components/DashboardScreen';
 import { ReconciliationScreen } from './components/ReconciliationScreen';
 import { ExpensesScreen } from './components/ExpensesScreen';
+import { uniqueId } from './utils/format';
 import { ProfitabilityScreen } from './components/ProfitabilityScreen';
 import { TripsScreen } from './components/TripsScreen';
 import { FleetScreen } from './components/FleetScreen';
@@ -38,18 +47,32 @@ import { AICfoScreen } from './components/AICfoScreen';
 import { FinancialStatementsScreen } from './components/FinancialStatementsScreen';
 import { InvoicesArScreen } from './components/InvoicesArScreen';
 import { LaunchQcScreen } from './components/LaunchQcScreen';
+import { AuditViewerScreen } from './components/AuditViewerScreen';
+import { UserManagementScreen } from './components/UserManagementScreen';
 import {
   fetchVehiclesFromSupabase,
   fetchCustomersFromSupabase,
   fetchCompanyProfileFromSupabase,
   fetchUserProfileFromSupabase,
+  fetchInvoicesFromSupabase,
+  fetchAuditLogsFromSupabase,
+  fetchAppUsersFromSupabase,
   upsertVehicleToSupabase,
   upsertCustomerToSupabase,
   upsertCompanyProfileToSupabase,
   upsertUserProfileToSupabase,
+  upsertInvoiceToSupabase,
+  recordInvoicePaymentToSupabase,
+  logAuditEventToSupabase,
+  upsertAppUserToSupabase,
+  softDeleteExpenseInSupabase,
+  softDeleteReconcileTxnInSupabase,
 } from './lib/supabase';
 
-export function App() {
+function AppShell() {
+  const { user, role, permissions, isAuthenticated, isLoading } = useAuth();
+  const roleMeta = ROLE_METADATA[role];
+
   const [currentPath, setCurrentPath] = useState<NavigationPath>('overview');
   const [vehicles, setVehicles] = useState<Vehicle[]>(INITIAL_VEHICLES);
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
@@ -60,7 +83,11 @@ export function App() {
     INITIAL_RECONCILIATION_TXNS
   );
   const [expenses, setExpenses] = useState<ExpenseClaim[]>(INITIAL_EXPENSES);
+  const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
+  const [appUsers, setAppUsers] = useState<AppUser[]>(Object.values(DEMO_USERS));
   const [anomaliesCount, setAnomaliesCount] = useState(3);
+  const [securityToast, setSecurityToast] = useState<string | null>(null);
 
   // Modals & Drawers state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -69,29 +96,46 @@ export function App() {
   const [classificationTxn, setClassificationTxn] = useState<ReconcileTransaction | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
+  // Guard routes based on role permissions
+  useEffect(() => {
+    if (!canAccessRoute(role, currentPath)) {
+      setCurrentPath('overview');
+      setSecurityToast(
+        `Security Notice (SEC-01): Role '${roleMeta?.badgeTitle || role}' cannot access /${currentPath}. Redirected to Overview.`
+      );
+      setTimeout(() => setSecurityToast(null), 4500);
+    }
+  }, [role, currentPath, roleMeta]);
+
   // Auto-hydrate state from Supabase if tables exist
   useEffect(() => {
     async function loadFromCloud() {
       try {
-        const [cloudVehicles, cloudCustomers, cloudCompany, cloudUser] = await Promise.all([
+        const [
+          cloudVehicles,
+          cloudCustomers,
+          cloudCompany,
+          cloudUser,
+          cloudInvoices,
+          cloudAuditLogs,
+          cloudAppUsers,
+        ] = await Promise.all([
           fetchVehiclesFromSupabase(),
           fetchCustomersFromSupabase(),
           fetchCompanyProfileFromSupabase(),
           fetchUserProfileFromSupabase(),
+          fetchInvoicesFromSupabase(),
+          fetchAuditLogsFromSupabase(),
+          fetchAppUsersFromSupabase(),
         ]);
 
-        if (cloudVehicles && cloudVehicles.length > 0) {
-          setVehicles(cloudVehicles);
-        }
-        if (cloudCustomers && cloudCustomers.length > 0) {
-          setCustomers(cloudCustomers);
-        }
-        if (cloudCompany) {
-          setCompanyProfile(cloudCompany);
-        }
-        if (cloudUser) {
-          setUserProfile(cloudUser);
-        }
+        if (cloudVehicles && cloudVehicles.length > 0) setVehicles(cloudVehicles);
+        if (cloudCustomers && cloudCustomers.length > 0) setCustomers(cloudCustomers);
+        if (cloudCompany) setCompanyProfile(cloudCompany);
+        if (cloudUser) setUserProfile(cloudUser);
+        if (cloudInvoices && cloudInvoices.length > 0) setInvoices(cloudInvoices);
+        if (cloudAuditLogs && cloudAuditLogs.length > 0) setAuditLogs(cloudAuditLogs);
+        if (cloudAppUsers && cloudAppUsers.length > 0) setAppUsers(cloudAppUsers);
       } catch (err) {
         console.warn('Supabase auto-hydration using local fallback:', err);
       }
@@ -100,36 +144,138 @@ export function App() {
     loadFromCloud();
   }, []);
 
+  // Universal Audit Logger
+  const handleLogAudit = async (entry: {
+    action: AuditLogEntry['action'];
+    entityType: AuditLogEntry['entityType'];
+    entityId: string;
+    previousValue?: string;
+    newValue?: string;
+    reason: string;
+    actorName?: string;
+    actorRole?: string;
+  }) => {
+    const newLog: AuditLogEntry = {
+      id: uniqueId('log'),
+      timestamp: new Date().toISOString(),
+      actorName: entry.actorName || user?.fullName || 'System Operator',
+      actorRole: entry.actorRole || roleMeta?.badgeTitle || role,
+      action: entry.action,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      previousValue: entry.previousValue,
+      newValue: entry.newValue,
+      reason: entry.reason,
+      ipHash: `sha256-node-${Math.random().toString(36).substring(2, 8)}`,
+    };
+
+    setAuditLogs((prev) => [newLog, ...prev]);
+
+    logAuditEventToSupabase({
+      actorName: newLog.actorName,
+      actorRole: newLog.actorRole,
+      action: newLog.action,
+      entityType: newLog.entityType,
+      entityId: newLog.entityId,
+      previousValue: newLog.previousValue,
+      newValue: newLog.newValue,
+      reason: newLog.reason,
+    }).catch(() => {});
+  };
+
   // Handlers for vehicles and customers with Supabase background sync
   const handleAddVehicle = (newVehicle: Vehicle) => {
     setVehicles((prev) => [newVehicle, ...prev]);
     upsertVehicleToSupabase(newVehicle).catch(() => {});
+    handleLogAudit({
+      action: 'VEHICLE_ADD',
+      entityType: 'VEHICLE',
+      entityId: newVehicle.reg,
+      newValue: `${newVehicle.reg} (${newVehicle.makeModel})`,
+      reason: `Fleet asset registered by ${user?.fullName || 'Operator'}`,
+    });
   };
 
   const handleAddCustomer = (newCustomer: Customer) => {
     setCustomers((prev) => [newCustomer, ...prev]);
     upsertCustomerToSupabase(newCustomer).catch(() => {});
+    handleLogAudit({
+      action: 'CUSTOMER_CREATE',
+      entityType: 'CUSTOMER',
+      entityId: newCustomer.id,
+      newValue: `${newCustomer.name} (${newCustomer.corridor} • ${newCustomer.creditDays}d terms)`,
+      reason: `Customer/Shipper onboarded by ${user?.fullName || 'Operator'}`,
+    });
   };
 
   const handleUpdateCompany = (newCompany: CompanyProfile) => {
     setCompanyProfile(newCompany);
     upsertCompanyProfileToSupabase(newCompany).catch(() => {});
+    handleLogAudit({
+      action: 'SETTINGS_UPDATE',
+      entityType: 'SETTINGS',
+      entityId: 'corporate_profile',
+      newValue: newCompany.legalName,
+      reason: 'Corporate Entity credentials and banking metadata updated',
+    });
   };
 
   const handleUpdateUser = (newUser: UserProfile) => {
     setUserProfile(newUser);
     upsertUserProfileToSupabase(newUser).catch(() => {});
+    handleLogAudit({
+      action: 'SETTINGS_UPDATE',
+      entityType: 'SETTINGS',
+      entityId: 'user_profile',
+      newValue: newUser.fullName,
+      reason: 'Self-service user profile and security contact updated',
+    });
   };
 
   // Handlers for reconciliation
   const handleConfirmMatch = (id: string) => {
+    const txn = reconcileTxns.find((t) => t.id === id);
     setReconcileTxns((prev) =>
       prev.map((t) => (t.id === id ? { ...t, status: 'matched' as const } : t))
     );
+    handleLogAudit({
+      action: 'RECONCILE_MATCH',
+      entityType: 'RECONCILIATION_TXN',
+      entityId: id,
+      newValue: 'matched',
+      reason: `Matched txn ref ${txn?.ref || id} to ledger (${txn?.merchantOrParty || 'Vendor'})`,
+    });
   };
 
-  const handleRejectTxn = (id: string) => {
-    setReconcileTxns((prev) => prev.filter((t) => t.id !== id));
+  // Soft-Delete Tombstone for Reconciliation with mandatory rationale
+  const handleRejectTxn = (id: string, reason?: string) => {
+    const rationale = reason || 'Transaction voided and soft-deleted during bank reconciliation audit';
+    const txn = reconcileTxns.find((t) => t.id === id);
+
+    setReconcileTxns((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              deletedAt: new Date().toISOString(),
+              deletedReason: rationale,
+              actorId: user?.id,
+              status: 'rejected' as any,
+            }
+          : t
+      )
+    );
+
+    softDeleteReconcileTxnInSupabase(id, rationale, user?.id).catch(() => {});
+
+    handleLogAudit({
+      action: 'RECONCILE_REJECT',
+      entityType: 'RECONCILIATION_TXN',
+      entityId: id,
+      previousValue: txn?.ref,
+      newValue: 'soft_deleted_tombstone',
+      reason: rationale,
+    });
   };
 
   const handleBatchAutoMatch = () => {
@@ -138,6 +284,13 @@ export function App() {
         t.status === 'review' ? { ...t, status: 'matched' as const } : t
       )
     );
+    handleLogAudit({
+      action: 'RECONCILE_MATCH',
+      entityType: 'RECONCILIATION_TXN',
+      entityId: 'batch_auto_match',
+      newValue: 'batch_matched',
+      reason: 'Automated batch match executed for high-confidence corridor transactions',
+    });
   };
 
   const handleSaveClassification = (
@@ -159,37 +312,237 @@ export function App() {
           : t
       )
     );
+    handleLogAudit({
+      action: 'RECONCILE_CLASSIFY',
+      entityType: 'RECONCILIATION_TXN',
+      entityId: txnId,
+      newValue: `${category} (${vehicle}) - ${memo}`,
+      reason: 'Manual classification & sub-ledger assignment',
+    });
   };
 
   // Handlers for expenses
-  const handleAddExpense = (newExpense: Partial<ExpenseClaim>) => {
-    setExpenses((prev) => [newExpense as ExpenseClaim, ...prev]);
+  const handleAddExpense = (raw: Partial<ExpenseClaim>) => {
+    const safeExpense: ExpenseClaim = {
+      id: raw.id || uniqueId('exp'),
+      claimNumber: raw.claimNumber || `EXP-2026-${uniqueId('').slice(-4)}`,
+      category: raw.category || 'Corridor Fuel Advance',
+      amountKes: Number(raw.amountKes) || 0,
+      vendor: raw.vendor || 'Authorized Service Station',
+      mpesaRef: raw.mpesaRef || `MP-${uniqueId('').slice(-8).toUpperCase()}`,
+      truckAsset: raw.truckAsset || (user?.assignedTruck || 'KDA 542T'),
+      dispatchId: raw.dispatchId || 'TRP-0824',
+      route: raw.route || 'Mombasa - Malaba - Kampala',
+      driverName: raw.driverName || user?.fullName || 'David Kimani',
+      driverId: raw.driverId || 'DRV-104',
+      submittedTime: raw.submittedTime || new Date().toISOString(),
+      submittedBy: raw.submittedBy || user?.fullName || 'Operations Desk',
+      telemetryPass: raw.telemetryPass ?? true,
+      telemetryNote: raw.telemetryNote,
+      varianceFlag: raw.varianceFlag ?? false,
+      varianceNote: raw.varianceNote,
+      missingReceipt: raw.missingReceipt ?? false,
+      status: (raw.status as ExpenseClaim['status']) || 'pending',
+      receiptAttached: raw.receiptAttached ?? true,
+    };
+
+    setExpenses((prev) => [safeExpense, ...prev]);
+
+    handleLogAudit({
+      action: 'EXPENSE_SUBMIT',
+      entityType: 'EXPENSE',
+      entityId: safeExpense.id,
+      newValue: `KES ${safeExpense.amountKes.toLocaleString()} (${safeExpense.category})`,
+      reason: `Voucher ${safeExpense.claimNumber} submitted by ${safeExpense.submittedBy} for truck ${safeExpense.truckAsset}`,
+    });
   };
 
+  // SEC-04: Approval check preventing self-approval
   const handleApproveExpense = (id: string) => {
+    const claim = expenses.find((e) => e.id === id);
+
+    // SEC-04 check
+    if (
+      user?.fullName &&
+      claim &&
+      (claim.submittedBy?.toLowerCase() === user.fullName.toLowerCase() ||
+        claim.driverName?.toLowerCase() === user.fullName.toLowerCase())
+    ) {
+      setSecurityToast(
+        'Policy SEC-04 Violation: Submitter cannot approve their own claim. Independent Controller required.'
+      );
+      setTimeout(() => setSecurityToast(null), 4500);
+      return;
+    }
+
     setExpenses((prev) =>
       prev.map((e) => (e.id === id ? { ...e, status: 'approved' as const } : e))
     );
+
+    handleLogAudit({
+      action: 'EXPENSE_APPROVE',
+      entityType: 'EXPENSE',
+      entityId: id,
+      newValue: 'approved',
+      reason: `Approved claim ${claim?.claimNumber || id} (KES ${claim?.amountKes.toLocaleString() || 0}) by Controller ${user?.fullName || 'Independent Controller'}`,
+    });
   };
 
-  const handleRejectExpense = (id: string) => {
+  // Soft-Delete / Rejection Tombstone for Expenses
+  const handleRejectExpense = (id: string, reason?: string) => {
+    const rationale = reason || 'Disallowed under KRA Section 23 / policy SEC-04';
+    const claim = expenses.find((e) => e.id === id);
+
     setExpenses((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, status: 'rejected' as const } : e))
+      prev.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              status: 'rejected' as const,
+              deletedAt: new Date().toISOString(),
+              deletedReason: rationale,
+              actorId: user?.id,
+            }
+          : e
+      )
     );
+
+    softDeleteExpenseInSupabase(id, rationale, user?.id).catch(() => {});
+
+    handleLogAudit({
+      action: 'EXPENSE_REJECT',
+      entityType: 'EXPENSE',
+      entityId: id,
+      newValue: 'rejected',
+      reason: rationale,
+    });
   };
 
   const handleHoldExpense = (id: string) => {
+    const claim = expenses.find((e) => e.id === id);
     setExpenses((prev) =>
       prev.map((e) => (e.id === id ? { ...e, status: 'held' as const } : e))
     );
+    handleLogAudit({
+      action: 'EXPENSE_HOLD',
+      entityType: 'EXPENSE',
+      entityId: id,
+      newValue: 'held',
+      reason: `Claim ${claim?.claimNumber || id} held pending fiscal receipt verification`,
+    });
+  };
+
+  // Invoices & AR CRUD Handlers
+  const handleInvoicesChange = (updatedInvoices: Invoice[]) => {
+    setInvoices(updatedInvoices);
+  };
+
+  const handleSaveInvoice = (newInv: Invoice) => {
+    upsertInvoiceToSupabase(newInv).catch(() => {});
+    handleLogAudit({
+      action: 'INVOICE_CREATE',
+      entityType: 'INVOICE',
+      entityId: newInv.id,
+      newValue: `${newInv.invoiceNumber} - $${newInv.totalAmount.toLocaleString()} (${newInv.customerName})`,
+      reason: `Freight tax invoice issued for waybill ${newInv.waybillNumber}`,
+    });
+  };
+
+  const handleRecordInvoicePayment = (
+    invoiceId: string,
+    payment: InvoicePayment,
+    newBalance: number,
+    newStatus: string
+  ) => {
+    recordInvoicePaymentToSupabase(invoiceId, payment, newBalance, newStatus).catch(() => {});
+    handleLogAudit({
+      action: 'PAYMENT_RECEIVE',
+      entityType: 'INVOICE_PAYMENT',
+      entityId: payment.id,
+      newValue: `${payment.currency} ${payment.amount.toLocaleString()} (${payment.method} ${payment.reference})`,
+      reason: `Payment matched to invoice ${invoiceId}. Remaining balance: $${newBalance.toLocaleString()}`,
+    });
+  };
+
+  // User Management Handlers (Admin Only)
+  const handleAddUser = (newUser: AppUser) => {
+    setAppUsers((prev) => [newUser, ...prev]);
+    upsertAppUserToSupabase(newUser).catch(() => {});
+    handleLogAudit({
+      action: 'USER_INVITE',
+      entityType: 'USER',
+      entityId: newUser.id,
+      newValue: `${newUser.fullName} <${newUser.email}> (${newUser.role})`,
+      reason: `Admin invited new enterprise operator`,
+    });
+  };
+
+  const handleUpdateUserRole = (userId: string, newRole: AppRole, reason: string) => {
+    const target = appUsers.find((u) => u.id === userId);
+    setAppUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+    );
+    if (target) {
+      upsertAppUserToSupabase({ ...target, role: newRole }).catch(() => {});
+    }
+    handleLogAudit({
+      action: 'ROLE_ASSIGN',
+      entityType: 'USER',
+      entityId: userId,
+      previousValue: target?.role,
+      newValue: newRole,
+      reason,
+    });
+  };
+
+  const handleToggleUserStatus = (userId: string, active: boolean, reason: string) => {
+    const target = appUsers.find((u) => u.id === userId);
+    setAppUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, active } : u))
+    );
+    if (target) {
+      upsertAppUserToSupabase({ ...target, active }).catch(() => {});
+    }
+    handleLogAudit({
+      action: active ? 'USER_ACTIVATE' : 'USER_DEACTIVATE',
+      entityType: 'USER',
+      entityId: userId,
+      newValue: active ? 'active' : 'inactive',
+      reason,
+    });
   };
 
   const handleResolveAnomaly = () => {
     setAnomaliesCount((prev) => Math.max(0, prev - 1));
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-surface-container-lowest flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4"></div>
+        <h2 className="font-headline-sm text-base font-bold text-on-surface">Ansury Logistics OS</h2>
+        <p className="font-body-sm text-xs text-outline mt-1">
+          Bootstrapping cryptographic session & corridor financial ledger...
+        </p>
+      </div>
+    );
+  }
+
+  // Gated Route View: if not authenticated, render LoginScreen
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
+
   return (
     <div className="min-h-screen bg-background text-on-surface flex">
+      {/* Toast */}
+      {securityToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-inverse-surface text-inverse-on-surface px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom-3 border border-amber-500/30">
+          <span className="material-symbols-outlined text-amber-400 text-[20px]">security</span>
+          <span className="font-body-md text-[13px]">{securityToast}</span>
+        </div>
+      )}
+
       {/* Sidebar Navigation */}
       <Sidebar
         currentPath={currentPath}
@@ -206,7 +559,7 @@ export function App() {
           notificationCount={anomaliesCount}
           companyName={companyProfile.legalName}
           accountNumber={companyProfile.accountNumber}
-          userName={userProfile.fullName}
+          userName={user?.fullName || userProfile.fullName}
         />
 
         {/* Dynamic Route View (offset by Header height 16 = 4rem = 64px) */}
@@ -216,7 +569,7 @@ export function App() {
               vehicles={vehicles}
               onNavigate={(path) => setCurrentPath(path)}
               onOpenQuickExpense={() => setIsQuickExpenseOpen(true)}
-              userName={userProfile.fullName}
+              userName={user?.fullName || userProfile.fullName}
               companyName={companyProfile.legalName}
             />
           )}
@@ -294,6 +647,10 @@ export function App() {
             <InvoicesArScreen
               customers={customers}
               vehicles={vehicles}
+              invoices={invoices}
+              onInvoicesChange={handleInvoicesChange}
+              onSaveInvoice={handleSaveInvoice}
+              onRecordInvoicePayment={handleRecordInvoicePayment}
               onNavigate={(path: NavigationPath) => setCurrentPath(path)}
             />
           )}
@@ -306,6 +663,23 @@ export function App() {
               userProfile={userProfile}
               onNavigate={(path: NavigationPath) => setCurrentPath(path)}
             />
+          )}
+
+          {currentPath === 'audit-logs' && (
+            <AuditViewerScreen logs={auditLogs} />
+          )}
+
+          {currentPath === 'user-management' && (
+            <div className="p-space-lg">
+              <UserManagementScreen
+                users={appUsers}
+                onAddUser={handleAddUser}
+                onUpdateUserRole={handleUpdateUserRole}
+                onToggleUserStatus={handleToggleUserStatus}
+                currentActorName={user?.fullName || 'Super Administrator'}
+                currentActorRole={roleMeta?.badgeTitle || 'Super Administrator'}
+              />
+            </div>
           )}
 
           {(currentPath === 'financial-statements' || currentPath === 'pl-cashflow') && (
@@ -351,11 +725,19 @@ export function App() {
       <ImportCsvModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onImportComplete={(count) => {
-          // add sample matched records
+        onImportComplete={(_count) => {
+          handleBatchAutoMatch();
         }}
       />
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   );
 }
 

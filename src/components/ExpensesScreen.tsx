@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ExpenseClaim } from '../types';
+import { useAuth } from '../lib/auth';
 
 interface ExpensesScreenProps {
   expenses: ExpenseClaim[];
@@ -18,6 +19,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   onRejectExpense,
   onHoldExpense,
 }) => {
+  const { user, role, permissions } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -366,16 +368,25 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                     </button>
 
                     <button
+                      disabled={!permissions.canApproveExpenses}
                       onClick={() => {
                         onRejectExpense(claim.id);
                         triggerToast(`Expense claim ${claim.claimNumber} rejected.`);
                       }}
-                      className="px-3 py-1 rounded-lg text-error hover:bg-error-container/30 font-body-sm text-[12px] font-semibold transition-colors"
+                      className="px-3 py-1 rounded-lg text-error hover:bg-error-container/30 font-body-sm text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Reject
                     </button>
 
-                    {activeAuditor === 'submitter' ? (
+                    {role === 'driver' ? (
+                      <div
+                        className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-body-sm text-[11px] font-semibold flex items-center gap-1 cursor-not-allowed"
+                        title="Driver permissions: Read-only visibility."
+                      >
+                        <span className="material-symbols-outlined text-[14px]">visibility</span>
+                        <span>Read-Only</span>
+                      </div>
+                    ) : activeAuditor === 'submitter' || (user?.fullName && (claim.submittedBy?.toLowerCase() === user.fullName.toLowerCase() || claim.driverName?.toLowerCase() === user.fullName.toLowerCase())) ? (
                       <div
                         className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-body-sm text-[11px] font-bold flex items-center gap-1 cursor-not-allowed"
                         title="Policy SEC-04: Submitter cannot approve their own claim. Dual approval by Independent Controller required."
@@ -385,21 +396,23 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                       </div>
                     ) : claim.missingReceipt ? (
                       <button
+                        disabled={!permissions.canApproveExpenses}
                         onClick={() => {
                           onHoldExpense(claim.id);
                           triggerToast(`Claim ${claim.claimNumber} placed on temporary hold awaiting driver upload.`);
                         }}
-                        className="px-3 py-1 rounded-lg bg-slate-200 text-slate-700 font-body-sm text-[12px] font-semibold hover:bg-slate-300 transition-colors"
+                        className="px-3 py-1 rounded-lg bg-slate-200 text-slate-700 font-body-sm text-[12px] font-semibold hover:bg-slate-300 transition-colors disabled:opacity-40"
                       >
                         Temporary Hold
                       </button>
                     ) : (
                       <button
+                        disabled={!permissions.canApproveExpenses}
                         onClick={() => {
                           onApproveExpense(claim.id);
                           triggerToast(`Approved ${claim.claimNumber} (KES ${claim.amountKes.toLocaleString()}) by Controller.`);
                         }}
-                        className="px-3 py-1 rounded-lg bg-primary text-on-primary font-body-sm text-[12px] font-medium hover:bg-primary-container shadow-sm transition-all flex items-center gap-1"
+                        className="px-3 py-1 rounded-lg bg-primary text-on-primary font-body-sm text-[12px] font-medium hover:bg-primary-container shadow-sm transition-all flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <span className="material-symbols-outlined text-[15px]">done</span>
                         Approve (KES {claim.amountKes.toLocaleString()})

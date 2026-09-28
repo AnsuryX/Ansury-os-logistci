@@ -1,10 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Invoice, InvoicePayment, Customer, Vehicle, NavigationPath } from '../types';
 import { INITIAL_INVOICES, INITIAL_AUDIT_LOGS } from '../data/mockInvoices';
+import { safeDivide, uniqueId } from '../utils/format';
+import { useAuth } from '../lib/auth';
 
 interface InvoicesArScreenProps {
   customers: Customer[];
   vehicles?: Vehicle[];
+  exchangeRate?: number;
+  invoices?: Invoice[];
+  onInvoicesChange?: (invoices: Invoice[]) => void;
+  onSaveInvoice?: (invoice: Invoice) => void;
+  onRecordInvoicePayment?: (
+    invoiceId: string,
+    payment: InvoicePayment,
+    newBalance: number,
+    newStatus: string
+  ) => void;
   onNavigate?: (path: NavigationPath) => void;
   onNavigateToStatements?: () => void;
   onRecordBankPayment?: (invoice: Invoice, amount: number, ref: string) => void;
@@ -13,10 +25,22 @@ interface InvoicesArScreenProps {
 export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
   customers,
   vehicles,
+  exchangeRate = 127.2,
+  invoices: externalInvoices,
+  onInvoicesChange,
+  onSaveInvoice,
+  onRecordInvoicePayment,
   onNavigate,
   onNavigateToStatements,
 }) => {
-  const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
+  const { role, permissions } = useAuth();
+  const [invoices, setInvoices] = useState<Invoice[]>(externalInvoices || INITIAL_INVOICES);
+
+  useEffect(() => {
+    if (externalInvoices && externalInvoices.length > 0) {
+      setInvoices(externalInvoices);
+    }
+  }, [externalInvoices]);
   const [activeFilter, setActiveFilter] = useState<'all' | 'outstanding' | 'partially_paid' | 'paid' | 'overdue'>('all');
   const [currencyMode, setCurrencyMode] = useState<'USD' | 'KES'>('USD');
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +68,7 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
   const [newInvAmount, setNewInvAmount] = useState('11800');
   const [newInvDueDate, setNewInvDueDate] = useState('2026-09-30');
 
-  const fxRate = 127.2;
+  const fxRate = exchangeRate || 127.2;
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -111,7 +135,7 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
     }
 
     const newPayment: InvoicePayment = {
-      id: `pay-${Date.now()}`,
+      id: uniqueId('pay'),
       date: new Date().toISOString().split('T')[0],
       amount: amt,
       currency: selectedInvoiceForPayment.currency,
@@ -120,23 +144,24 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
       notes: paymentNotes.trim() || 'Payment processed and matched to invoice',
     };
 
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== selectedInvoiceForPayment.id) return inv;
+    const updatedPaid = selectedInvoiceForPayment.paidAmount + amt;
+    const updatedBalance = Math.max(0, selectedInvoiceForPayment.totalAmount - updatedPaid);
+    const updatedStatus = updatedBalance === 0 ? ('paid' as const) : ('partially_paid' as const);
 
-        const updatedPaid = inv.paidAmount + amt;
-        const updatedBalance = Math.max(0, inv.totalAmount - updatedPaid);
-        const updatedStatus = updatedBalance === 0 ? ('paid' as const) : ('partially_paid' as const);
+    const updatedInvoices = invoices.map((inv) => {
+      if (inv.id !== selectedInvoiceForPayment.id) return inv;
+      return {
+        ...inv,
+        paidAmount: updatedPaid,
+        remainingBalance: updatedBalance,
+        status: updatedStatus,
+        paymentHistory: [...inv.paymentHistory, newPayment],
+      };
+    });
 
-        return {
-          ...inv,
-          paidAmount: updatedPaid,
-          remainingBalance: updatedBalance,
-          status: updatedStatus,
-          paymentHistory: [...inv.paymentHistory, newPayment],
-        };
-      })
-    );
+    setInvoices(updatedInvoices);
+    onRecordInvoicePayment?.(selectedInvoiceForPayment.id, newPayment, updatedBalance, updatedStatus);
+    onInvoicesChange?.(updatedInvoices);
 
     triggerToast(`Payment of $${amt.toLocaleString('en-US', { minimumFractionDigits: 2 })} recorded successfully for ${selectedInvoiceForPayment.invoiceNumber}! Cash increased, AR reduced.`);
     setSelectedInvoiceForPayment(null);
@@ -161,18 +186,33 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
       return;
     }
 
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== selectedInvoiceForRefund.id) return inv;
-        return {
-          ...inv,
-          status: 'refunded' as const,
-          remainingBalance: 0,
-          paidAmount: inv.paidAmount - amt,
-          cargoDescription: `${inv.cargoDescription} [REFUND ISSUED: $${amt.toFixed(2)} - ${refundReason}]`,
-        };
-      })
-    );
+    const updatedInvoices: Invoice[] = invoices.map((inv) => {
+      if (inv.id !== selectedInvoiceForRefund.id) return inv;
+      const updatedPaid = Math.max(0, inv.paidAmount - amt);
+      const updatedBalance = Math.max(0, inv.totalAmount - updatedPaid);
+
+      let updatedStatus: Invoice['status'] = 'issued';
+      if (updatedPaid === 0 && amt === inv.paidAmount && inv.totalAmount === amt) {
+        updatedStatus = 'refunded';
+      } else if (updatedPaid === 0) {
+        updatedStatus = 'issued';
+      } else if (updatedBalance === 0) {
+        updatedStatus = 'paid';
+      } else {
+        updatedStatus = 'partially_paid';
+      }
+
+      return {
+        ...inv,
+        status: updatedStatus,
+        paidAmount: updatedPaid,
+        remainingBalance: updatedBalance,
+        cargoDescription: `${inv.cargoDescription} [REFUND ISSUED: $${amt.toFixed(2)} - ${refundReason}]`,
+      };
+    });
+
+    setInvoices(updatedInvoices);
+    onInvoicesChange?.(updatedInvoices);
 
     triggerToast(`Credit Note & Refund of $${amt.toFixed(2)} issued for ${selectedInvoiceForRefund.invoiceNumber}. Contra-revenue logged to audit trail.`);
     setSelectedInvoiceForRefund(null);
@@ -189,10 +229,12 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
       return;
     }
 
+    const matchedCustomer = customers.find((c) => c.name === newInvCustomer);
+
     const newInv: Invoice = {
-      id: `inv-${Date.now()}`,
-      invoiceNumber: `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerId: `cust-${Math.floor(Math.random() * 5) + 1}`,
+      id: uniqueId('inv'),
+      invoiceNumber: `INV-2026-${uniqueId('').slice(-4)}`,
+      customerId: matchedCustomer ? matchedCustomer.id : uniqueId('cust'),
       customerName: newInvCustomer,
       issueDate: new Date().toISOString().split('T')[0],
       dueDate: newInvDueDate,
@@ -208,7 +250,10 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
       paymentHistory: [],
     };
 
-    setInvoices((prev) => [newInv, ...prev]);
+    const updatedInvoices = [newInv, ...invoices];
+    setInvoices(updatedInvoices);
+    onSaveInvoice?.(newInv);
+    onInvoicesChange?.(updatedInvoices);
     triggerToast(`Invoice ${newInv.invoiceNumber} created for ${newInvCustomer}! AR updated.`);
     setIsCreateModalOpen(false);
   };
@@ -268,17 +313,25 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
                 currencyMode === 'KES' ? 'bg-primary text-white shadow-sm' : 'text-outline hover:text-on-surface'
               }`}
             >
-              KES (@ 127.2)
+              KES (@ {fxRate.toFixed(1)})
             </button>
           </div>
 
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-body-sm text-[12px] font-medium shadow-sm transition-all flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[16px]">add_circle</span>
-            Issue Freight Invoice
-          </button>
+          {role === 'driver' ? (
+            <div className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 font-body-sm text-[12px] font-semibold flex items-center gap-1.5 border border-slate-200">
+              <span className="material-symbols-outlined text-[16px] text-slate-500">visibility</span>
+              <span>Driver (Read-Only)</span>
+            </div>
+          ) : (
+            <button
+              disabled={!permissions.canManageInvoices}
+              onClick={() => setIsCreateModalOpen(true)}
+              className="px-3.5 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-body-sm text-[12px] font-medium shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[16px]">add_circle</span>
+              Issue Freight Invoice
+            </button>
+          )}
         </div>
       </div>
 
@@ -299,7 +352,9 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
           </div>
           <div className="mt-3 pt-2 border-t border-[#eff4ff] flex items-center justify-between text-[11px]">
             <span className="text-outline">Total Freight Billed</span>
-            <span className="font-label-code text-on-surface-variant font-medium">8 Waybills MTD</span>
+            <span className="font-label-code text-on-surface-variant font-medium">
+              {invoices.filter((i) => i.status !== 'voided').length} Waybills MTD
+            </span>
           </div>
         </div>
 
@@ -355,8 +410,14 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
             </div>
           </div>
           <div className="mt-3 pt-2 border-t border-rose-100 flex items-center justify-between text-[11px]">
-            <span className="text-rose-800">Mogas Uganda Ltd</span>
-            <span className="font-label-code text-rose-900 font-bold">Aging: 45 Days</span>
+            <span className="text-rose-800 truncate max-w-[140px] inline-block">
+              {invoices.find((i) => i.status === 'overdue')?.customerName || 'No overdue accounts'}
+            </span>
+            <span className="font-label-code text-rose-900 font-bold">
+              {invoices.filter((i) => i.status === 'overdue').length > 0
+                ? `${invoices.filter((i) => i.status === 'overdue').length} Overdue Inv`
+                : '0 Overdue'}
+            </span>
           </div>
         </div>
       </div>
@@ -550,7 +611,7 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
                       )}
                       {isPartiallyPaid && (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                          PARTIAL ({((inv.paidAmount / inv.totalAmount) * 100).toFixed(0)}%)
+                          PARTIAL ({(safeDivide(inv.paidAmount, inv.totalAmount) * 100).toFixed(0)}%)
                         </span>
                       )}
                       {inv.status === 'issued' && (
@@ -577,38 +638,46 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
 
                     {/* Actions */}
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {/* Record Partial / Full Payment Button */}
-                        {inv.remainingBalance > 0 && inv.status !== 'voided' && (
-                          <button
-                            onClick={() => {
-                              setSelectedInvoiceForPayment(inv);
-                              setPaymentAmount(inv.remainingBalance.toString());
-                              setPaymentRef(`RTGS-${Math.floor(100000 + Math.random() * 900000)}`);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-body-sm text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm"
-                            title="Record Partial or Full Payment"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">payments</span>
-                            <span>Pay</span>
-                          </button>
-                        )}
+                      {role === 'driver' ? (
+                        <span className="text-slate-400 text-[11px] font-semibold">
+                          Read-Only
+                        </span>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Record Partial / Full Payment Button */}
+                          {inv.remainingBalance > 0 && inv.status !== 'voided' && (
+                            <button
+                              disabled={!permissions.canManageInvoices}
+                              onClick={() => {
+                                setSelectedInvoiceForPayment(inv);
+                                setPaymentAmount(inv.remainingBalance.toString());
+                                setPaymentRef(`RTGS-${Math.floor(100000 + Math.random() * 900000)}`);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-body-sm text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm disabled:opacity-40"
+                              title="Record Partial or Full Payment"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">payments</span>
+                              <span>Pay</span>
+                            </button>
+                          )}
 
-                        {/* Issue Refund / Credit Note Button */}
-                        {inv.paidAmount > 0 && !isRefunded && (
-                          <button
-                            onClick={() => {
-                              setSelectedInvoiceForRefund(inv);
-                              setRefundAmount(inv.paidAmount.toString());
-                              setRefundReason('Shipper fuel rebate adjustment or cargo volume variance');
-                            }}
-                            className="px-2 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container text-outline hover:text-on-surface font-body-sm text-[11px] font-semibold transition-colors border border-[#dce9ff]"
-                            title="Issue Refund / Credit Note"
-                          >
-                            <span>Refund</span>
-                          </button>
-                        )}
-                      </div>
+                          {/* Issue Refund / Credit Note Button */}
+                          {inv.paidAmount > 0 && !isRefunded && (
+                            <button
+                              disabled={!permissions.canManageInvoices}
+                              onClick={() => {
+                                setSelectedInvoiceForRefund(inv);
+                                setRefundAmount(inv.paidAmount.toString());
+                                setRefundReason('Shipper fuel rebate adjustment or cargo volume variance');
+                              }}
+                              className="px-2 py-1 rounded-lg bg-surface-container-low hover:bg-surface-container text-outline hover:text-on-surface font-body-sm text-[11px] font-semibold transition-colors border border-[#dce9ff] disabled:opacity-40"
+                              title="Issue Refund / Credit Note"
+                            >
+                              <span>Refund</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );

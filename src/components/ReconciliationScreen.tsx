@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { ReconcileTransaction } from '../types';
+import { useAuth } from '../lib/auth';
 
 interface ReconciliationScreenProps {
   transactions: ReconcileTransaction[];
   onOpenImportModal: () => void;
   onOpenClassifierDrawer: (txn: ReconcileTransaction) => void;
   onConfirmMatch: (id: string) => void;
-  onRejectTxn: (id: string) => void;
+  onRejectTxn: (id: string, reason?: string) => void;
   onBatchAutoMatch: () => void;
 }
 
@@ -18,21 +19,47 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
   onRejectTxn,
   onBatchAutoMatch,
 }) => {
-  const [activeTab, setActiveTab] = useState<'review' | 'matched' | 'unmatched' | 'suspicious'>('review');
+  const { role, permissions } = useAuth();
+  const [activeTab, setActiveTab] = useState<'review' | 'matched' | 'unmatched' | 'suspicious' | 'rejected'>('review');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Reject / Soft-Delete Tombstone Modal State
+  const [rejectingTxn, setRejectingTxn] = useState<ReconcileTransaction | null>(null);
+  const [rejectionRationale, setRejectionRationale] = useState('');
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const filteredTxns = transactions.filter((t) => t.status === activeTab);
+  const filteredTxns = transactions.filter((t) => {
+    if (activeTab === 'rejected') {
+      return Boolean(t.deletedAt) || (t as any).status === 'rejected';
+    }
+    if (t.deletedAt) return false;
+    return t.status === activeTab;
+  });
 
   const tabCounts = {
-    review: transactions.filter((t) => t.status === 'review').length,
-    matched: transactions.filter((t) => t.status === 'matched').length,
-    unmatched: transactions.filter((t) => t.status === 'unmatched').length,
-    suspicious: transactions.filter((t) => t.status === 'suspicious').length,
+    review: transactions.filter((t) => !t.deletedAt && t.status === 'review').length,
+    matched: transactions.filter((t) => !t.deletedAt && t.status === 'matched').length,
+    unmatched: transactions.filter((t) => !t.deletedAt && t.status === 'unmatched').length,
+    suspicious: transactions.filter((t) => !t.deletedAt && t.status === 'suspicious').length,
+    rejected: transactions.filter((t) => Boolean(t.deletedAt) || (t as any).status === 'rejected').length,
+  };
+
+  const handleConfirmRejection = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectingTxn) return;
+    if (!rejectionRationale.trim()) {
+      triggerToast('Error: Mandatory audit rationale is required for soft-delete tombstone.');
+      return;
+    }
+
+    onRejectTxn(rejectingTxn.id, rejectionRationale.trim());
+    triggerToast(`Transaction ${rejectingTxn.ref} soft-deleted with audit tombstone.`);
+    setRejectingTxn(null);
+    setRejectionRationale('');
   };
 
   return (
@@ -242,6 +269,23 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
               {tabCounts.suspicious}
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('rejected')}
+            className={`px-3 py-1.5 rounded-xl font-body-sm text-[12px] font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'rejected'
+                ? 'bg-rose-700 text-white shadow-sm'
+                : 'text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[15px]">delete_sweep</span>
+            <span>Rejected (Tombstones)</span>
+            <span className={`font-label-code text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              activeTab === 'rejected' ? 'bg-white text-rose-800' : 'bg-rose-100 text-rose-800'
+            }`}>
+              {tabCounts.rejected}
+            </span>
+          </button>
         </div>
 
         {/* Date & Account dropdowns */}
@@ -367,7 +411,11 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
                       {/* Action buttons */}
                       <td className="py-3.5 px-4 text-right align-middle">
                         <div className="flex flex-col items-end gap-1.5">
-                          {txn.status === 'review' && (
+                          {role === 'driver' ? (
+                            <span className="text-slate-400 text-[11px] font-semibold">
+                              Read-Only
+                            </span>
+                          ) : txn.status === 'review' ? (
                             <>
                               <button
                                 onClick={() => {
@@ -396,14 +444,11 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
                                 </button>
                               </div>
                             </>
-                          )}
-
-                          {txn.status === 'suspicious' && (
+                          ) : txn.status === 'suspicious' ? (
                             <>
                               <button
                                 onClick={() => {
-                                  onRejectTxn(txn.id);
-                                  triggerToast(`Disputed duplicate charge ${txn.ref} with Shell Eldoret.`);
+                                  setRejectingTxn(txn);
                                 }}
                                 className="px-3 py-1 rounded-lg bg-error text-white font-label-code text-[11px] font-bold hover:bg-error/90 shadow-sm"
                               >
@@ -417,9 +462,7 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
                                 Call Driver
                               </button>
                             </>
-                          )}
-
-                          {txn.status === 'unmatched' && (
+                          ) : txn.status === 'unmatched' ? (
                             <>
                               <button
                                 onClick={() => onOpenClassifierDrawer(txn)}
@@ -434,13 +477,20 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
                                 Assign to Fleet
                               </button>
                             </>
-                          )}
-
-                          {txn.status === 'matched' && (
+                          ) : txn.status === 'matched' ? (
                             <span className="font-label-code text-[11px] text-tertiary bg-emerald-50 px-2 py-1 rounded font-bold border border-emerald-200 flex items-center gap-1">
                               <span className="material-symbols-outlined text-[14px]">check</span>
                               Reconciled
                             </span>
+                          ) : (
+                            <div className="text-right">
+                              <span className="font-label-code text-[10px] text-rose-800 bg-rose-50 px-2 py-0.5 rounded font-bold border border-rose-200 block">
+                                Disputed Tombstone
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-mono block mt-0.5 max-w-[160px] truncate" title={txn.deletedReason}>
+                                {txn.deletedReason || 'Excluded from settlement'}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -473,6 +523,64 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Reject / Soft-Delete Tombstone Modal */}
+      {rejectingTxn && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-rose-600 text-[22px]">delete_sweep</span>
+                <h3 className="text-base font-bold text-slate-900">Soft-Delete Audit Tombstone</h3>
+              </div>
+              <button onClick={() => setRejectingTxn(null)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1">
+              <div className="font-bold text-slate-900">{rejectingTxn.merchantOrParty}</div>
+              <div className="text-slate-500 font-mono text-[11px]">{rejectingTxn.ref} · KES {rejectingTxn.amountKes.toLocaleString()}</div>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Per immutable audit standards, records are never silently deleted. Provide a mandatory reason to place this entry in the soft-deleted tombstone ledger.
+            </p>
+
+            <form onSubmit={handleConfirmRejection} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Mandatory Rejection / Dispute Rationale *
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={rejectionRationale}
+                  onChange={(e) => setRejectionRationale(e.target.value)}
+                  placeholder="e.g. Disputed duplicate pump debit / Unauthorized personal charge / Invalid merchant reversal"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRejectingTxn(null)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-rose-600 text-white font-semibold hover:bg-rose-700 shadow-sm"
+                >
+                  Confirm Soft Delete
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

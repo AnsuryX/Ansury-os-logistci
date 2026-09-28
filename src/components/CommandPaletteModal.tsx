@@ -5,12 +5,14 @@ interface CommandPaletteModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (path: NavigationPath) => void;
+  onToggle?: () => void;
 }
 
 export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   isOpen,
   onClose,
   onNavigate,
+  onToggle,
 }) => {
   const [query, setQuery] = useState('');
 
@@ -18,8 +20,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        if (isOpen) onClose();
-        else onClose(); // parent handles toggle
+        if (onToggle) {
+          onToggle();
+        } else if (isOpen) {
+          onClose();
+        }
       }
       if (e.key === 'Escape' && isOpen) {
         onClose();
@@ -27,7 +32,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, onToggle]);
 
   if (!isOpen) return null;
 

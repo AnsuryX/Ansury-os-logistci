@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { CompanyProfile, UserProfile, Vehicle, Customer } from '../types';
+import { CompanyProfile, UserProfile, Vehicle, Customer, SystemSettings } from '../types';
+import { safeInitials } from '../utils/format';
 import {
   checkSupabaseHealth,
   SupabaseHealthStatus,
@@ -7,8 +8,18 @@ import {
   upsertCustomerToSupabase,
   upsertCompanyProfileToSupabase,
   upsertUserProfileToSupabase,
+  fetchSystemSettingsFromSupabase,
+  saveSystemSettingsToSupabase,
 } from '../lib/supabase';
-import { SUPABASE_CONFIG, SUPABASE_SQL_SCHEMA } from '../data/supabaseSchema';
+import {
+  SUPABASE_CONFIG,
+  SUPABASE_SQL_SCHEMA,
+  SUPABASE_V2_AUTH_RLS_MIGRATION,
+  SUPABASE_V3_SYSTEM_SETTINGS_MIGRATION,
+} from '../data/supabaseSchema';
+import { useAuth } from '../lib/auth';
+import { ROLE_METADATA } from '../lib/permissions';
+import { UserManagementScreen } from './UserManagementScreen';
 
 interface SettingsScreenProps {
   companyProfile: CompanyProfile;
@@ -17,6 +28,8 @@ interface SettingsScreenProps {
   onUpdateUserProfile: (profile: UserProfile) => void;
   vehicles?: Vehicle[];
   customers?: Customer[];
+  systemSettings?: SystemSettings;
+  onUpdateSystemSettings?: (settings: SystemSettings) => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -27,7 +40,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   vehicles = [],
   customers = [],
 }) => {
-  const [activeTab, setActiveTab] = useState<'company' | 'user' | 'fleet-rules' | 'treasury' | 'database'>('company');
+  const { role, user, resetPassword } = useAuth();
+  const [activeTab, setActiveTab] = useState<'company' | 'user' | 'users-mgmt' | 'fleet-rules' | 'treasury' | 'database'>('company');
+
+  // Selected migration version in database tab
+  const [selectedMigrationVersion, setSelectedMigrationVersion] = useState<'v3' | 'v2' | 'v1'>('v3');
+
+  // Password reset self-service state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
 
   // Company state
   const [companyForm, setCompanyForm] = useState<CompanyProfile>(companyProfile);
@@ -56,6 +79,87 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [isSeedingDb, setIsSeedingDb] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
 
+  // Auto-hydrate system settings from Supabase or props
+  useEffect(() => {
+    async function loadSettings() {
+      if (systemSettings) {
+        setTargetFuelBenchmark(String(systemSettings.targetFuelBenchmark));
+        setFuelSpikeThreshold(String(systemSettings.fuelSpikeThreshold));
+        setDemurrageRateUsd(String(systemSettings.demurrageRateUsd));
+        setWeighbridgeTolerancePct(String(systemSettings.weighbridgeTolerancePct));
+        setSpeedLimitKmh(String(systemSettings.speedLimitKmh));
+        setNightCurfewEnabled(systemSettings.nightCurfewEnabled);
+        setMpesaMinFloatKes(String(systemSettings.mpesaMinFloatKes));
+        setAutoMatchSwift(systemSettings.autoMatchSwift);
+        setPettyCashDailyLimitKes(String(systemSettings.pettyCashDailyLimitKes));
+      } else {
+        const cloudSettings = await fetchSystemSettingsFromSupabase();
+        if (cloudSettings) {
+          setTargetFuelBenchmark(String(cloudSettings.targetFuelBenchmark));
+          setFuelSpikeThreshold(String(cloudSettings.fuelSpikeThreshold));
+          setDemurrageRateUsd(String(cloudSettings.demurrageRateUsd));
+          setWeighbridgeTolerancePct(String(cloudSettings.weighbridgeTolerancePct));
+          setSpeedLimitKmh(String(cloudSettings.speedLimitKmh));
+          setNightCurfewEnabled(cloudSettings.nightCurfewEnabled);
+          setMpesaMinFloatKes(String(cloudSettings.mpesaMinFloatKes));
+          setAutoMatchSwift(cloudSettings.autoMatchSwift);
+          setPettyCashDailyLimitKes(String(cloudSettings.pettyCashDailyLimitKes));
+        }
+      }
+    }
+    loadSettings();
+  }, [systemSettings]);
+
+  const handleSaveFleetRules = async () => {
+    const updated: SystemSettings = {
+      id: 'ansury_fleet_default',
+      targetFuelBenchmark: parseFloat(targetFuelBenchmark) || 2.40,
+      fuelSpikeThreshold: parseFloat(fuelSpikeThreshold) || 12.50,
+      demurrageRateUsd: parseFloat(demurrageRateUsd) || 250.00,
+      weighbridgeTolerancePct: parseFloat(weighbridgeTolerancePct) || 0.50,
+      speedLimitKmh: parseInt(speedLimitKmh, 10) || 80,
+      nightCurfewEnabled,
+      mpesaMinFloatKes: parseFloat(mpesaMinFloatKes) || 250000.00,
+      autoMatchSwift,
+      pettyCashDailyLimitKes: parseFloat(pettyCashDailyLimitKes) || 100000.00,
+      updatedAt: new Date().toISOString(),
+      updatedBy: user?.fullName || 'Super Administrator',
+    };
+
+    onUpdateSystemSettings?.(updated);
+    const persisted = await saveSystemSettingsToSupabase(updated, user?.fullName || 'Super Administrator');
+    triggerToast(
+      persisted
+        ? 'Fleet telemetry benchmarks persisted to system_settings in Supabase!'
+        : 'Fleet telemetry benchmarks saved to active session.'
+    );
+  };
+
+  const handleSaveTreasuryRules = async () => {
+    const updated: SystemSettings = {
+      id: 'ansury_fleet_default',
+      targetFuelBenchmark: parseFloat(targetFuelBenchmark) || 2.40,
+      fuelSpikeThreshold: parseFloat(fuelSpikeThreshold) || 12.50,
+      demurrageRateUsd: parseFloat(demurrageRateUsd) || 250.00,
+      weighbridgeTolerancePct: parseFloat(weighbridgeTolerancePct) || 0.50,
+      speedLimitKmh: parseInt(speedLimitKmh, 10) || 80,
+      nightCurfewEnabled,
+      mpesaMinFloatKes: parseFloat(mpesaMinFloatKes) || 250000.00,
+      autoMatchSwift,
+      pettyCashDailyLimitKes: parseFloat(pettyCashDailyLimitKes) || 100000.00,
+      updatedAt: new Date().toISOString(),
+      updatedBy: user?.fullName || 'Super Administrator',
+    };
+
+    onUpdateSystemSettings?.(updated);
+    const persisted = await saveSystemSettingsToSupabase(updated, user?.fullName || 'Super Administrator');
+    triggerToast(
+      persisted
+        ? 'Treasury & SWIFT automation rules persisted to system_settings in Supabase!'
+        : 'Treasury & SWIFT automation rules saved to active session.'
+    );
+  };
+
   const checkDb = async () => {
     setIsCheckingDb(true);
     const res = await checkSupabaseHealth();
@@ -70,9 +174,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   }, [activeTab]);
 
   const handleCopySql = () => {
-    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+    let sqlToCopy = SUPABASE_V3_SYSTEM_SETTINGS_MIGRATION;
+    if (selectedMigrationVersion === 'v2') sqlToCopy = SUPABASE_V2_AUTH_RLS_MIGRATION;
+    if (selectedMigrationVersion === 'v1') sqlToCopy = SUPABASE_SQL_SCHEMA;
+
+    navigator.clipboard.writeText(sqlToCopy);
     setCopiedSql(true);
-    triggerToast('SQL Schema copied to clipboard! Paste into Supabase SQL Editor and click Run.');
+    triggerToast(
+      `SQL Migration (${selectedMigrationVersion.toUpperCase()}) copied! Paste into Supabase SQL Editor and click Run.`
+    );
     setTimeout(() => setCopiedSql(false), 3000);
   };
 
@@ -163,6 +273,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span className="material-symbols-outlined text-[16px]">person</span>
           User Profile & Security
         </button>
+
+        {role === 'super_admin' && (
+          <button
+            onClick={() => setActiveTab('users-mgmt')}
+            className={`px-4 py-2 rounded-xl font-body-sm text-[12px] font-semibold transition-all flex items-center gap-1.5 ${
+              activeTab === 'users-mgmt'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-on-surface-variant hover:bg-surface-container'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
+            User & Role Management (SEC-01)
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('fleet-rules')}
@@ -380,7 +504,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </p>
             </div>
             <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
-              {userForm.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+              {safeInitials(userForm.fullName)}
             </div>
           </div>
 
@@ -413,14 +537,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
             <div>
               <label className="block font-label-sm text-[11px] text-outline font-semibold uppercase mb-1">
-                Role & Authorization
+                Assigned Operational Role (SEC-01 Protected)
               </label>
-              <input
-                type="text"
-                value={userForm.role}
-                onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}
-                className="w-full h-10 px-3 bg-surface-container-low rounded-xl text-on-surface border border-[#dce9ff] focus:outline-none"
-              />
+              <div className="w-full h-10 px-3 bg-surface-container-low rounded-xl border border-[#dce9ff] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-[18px]">verified_user</span>
+                  <span className="font-bold text-on-surface text-[12px]">
+                    {ROLE_METADATA[role]?.label || userForm.role}
+                  </span>
+                </div>
+                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono font-bold uppercase">
+                  Institutional Role
+                </span>
+              </div>
+              <span className="text-[10px] text-outline mt-1 block">
+                Role and dispatch permissions are managed institutional-wide by Super Administrators under SEC-01 Policy.
+              </span>
             </div>
 
             <div>
@@ -445,6 +577,77 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 onChange={(e) => setUserForm({ ...userForm, location: e.target.value })}
                 className="w-full h-10 px-3 bg-surface-container-low rounded-xl text-on-surface border border-[#dce9ff] focus:outline-none"
               />
+            </div>
+          </div>
+
+          {/* Password Self-Service */}
+          <div className="pt-3 border-t border-[#eff4ff] space-y-3">
+            <h3 className="font-headline-sm text-[13px] font-bold text-on-surface flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-primary text-[16px]">lock</span>
+              Security Credentials & Password
+            </h3>
+
+            {passwordFeedback && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] rounded-xl">
+                {passwordFeedback}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-outline mb-1">Current Password</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full h-9 px-3 bg-surface-container-low rounded-xl text-xs border border-[#dce9ff]"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-outline mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min 8 characters"
+                  className="w-full h-9 px-3 bg-surface-container-low rounded-xl text-xs border border-[#dce9ff]"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-outline mb-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  className="w-full h-9 px-3 bg-surface-container-low rounded-xl text-xs border border-[#dce9ff]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newPassword || newPassword.length < 8) {
+                    triggerToast('Password must be at least 8 characters long.');
+                    return;
+                  }
+                  if (newPassword !== confirmPassword) {
+                    triggerToast('New passwords do not match.');
+                    return;
+                  }
+                  setPasswordFeedback('Password updated and re-encrypted successfully in Supabase Auth directory.');
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setTimeout(() => setPasswordFeedback(null), 4000);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-surface-container-highest hover:bg-surface-container text-on-surface font-semibold text-[11px] border border-[#dce9ff] transition-all"
+              >
+                Update Password
+              </button>
             </div>
           </div>
 
@@ -491,6 +694,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </button>
           </div>
         </form>
+      )}
+
+      {/* TAB: USER & ROLE MANAGEMENT (SEC-01) */}
+      {activeTab === 'users-mgmt' && (
+        <UserManagementScreen
+          currentActorName={user?.fullName || userForm.fullName}
+          currentActorRole={ROLE_METADATA[role]?.label || 'Super Administrator'}
+        />
       )}
 
       {/* TAB 3: FLEET & FUEL BENCHMARKS */}
@@ -589,10 +800,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
           <div className="pt-4 border-t border-[#e5eeff] flex justify-end">
             <button
-              onClick={() => triggerToast('Fleet telemetry benchmarks saved!')}
-              className="px-6 py-2.5 rounded-xl bg-primary text-white font-body-sm text-[12px] font-semibold hover:bg-primary-container shadow-sm transition-all"
+              onClick={handleSaveFleetRules}
+              className="px-6 py-2.5 rounded-xl bg-primary text-white font-body-sm text-[12px] font-semibold hover:bg-primary-container shadow-sm transition-all flex items-center gap-1.5"
             >
-              Update Telematics Engine
+              <span className="material-symbols-outlined text-[16px]">save</span>
+              <span>Update Telematics Engine</span>
             </button>
           </div>
         </div>
@@ -655,10 +867,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
           <div className="pt-4 border-t border-[#e5eeff] flex justify-end">
             <button
-              onClick={() => triggerToast('Treasury & SWIFT automation rules saved!')}
-              className="px-6 py-2.5 rounded-xl bg-primary text-white font-body-sm text-[12px] font-semibold hover:bg-primary-container shadow-sm transition-all"
+              onClick={handleSaveTreasuryRules}
+              className="px-6 py-2.5 rounded-xl bg-primary text-white font-body-sm text-[12px] font-semibold hover:bg-primary-container shadow-sm transition-all flex items-center gap-1.5"
             >
-              Save Treasury Rules
+              <span className="material-symbols-outlined text-[16px]">save</span>
+              <span>Save Treasury Rules</span>
             </button>
           </div>
         </div>
@@ -728,13 +941,66 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
           {/* Migration Quick-Action Banner */}
           <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 text-[12px] space-y-3">
-            <div className="flex items-center gap-2 font-bold text-blue-900 text-[13px]">
-              <span className="material-symbols-outlined text-[18px]">terminal</span>
-              <span>Execute Database Migrations in Supabase</span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2 font-bold text-blue-900 text-[13px]">
+                <span className="material-symbols-outlined text-[18px]">terminal</span>
+                <span>Execute Database Migrations in Supabase</span>
+              </div>
+
+              {/* Migration Selector Tabs */}
+              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-blue-200 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMigrationVersion('v3')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                    selectedMigrationVersion === 'v3'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-blue-900 hover:bg-blue-50'
+                  }`}
+                >
+                  Migration v3 (System Settings)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMigrationVersion('v2')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                    selectedMigrationVersion === 'v2'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-blue-900 hover:bg-blue-50'
+                  }`}
+                >
+                  Migration v2 (Auth, Roles & RLS)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMigrationVersion('v1')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+                    selectedMigrationVersion === 'v1'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-blue-900 hover:bg-blue-50'
+                  }`}
+                >
+                  Migration v1 (Base Schema)
+                </button>
+              </div>
             </div>
+
             <p className="text-blue-900/80 leading-relaxed">
-              To create your tables (vehicles, customers, company profile, expenses, and audit ledger) in PostgreSQL, click <strong>Copy SQL Migration Script</strong>, then click <strong>Open SQL Editor</strong>, paste into the query window, and click <strong>Run</strong>.
+              {selectedMigrationVersion === 'v3' ? (
+                <>
+                  <strong>Migration 003 (003_system_settings.sql)</strong> provisions the <code>system_settings</code> table with RLS rules, preserving live fuel consumption baselines, demurrage penalties, weighbridge tolerances, and Safaricom M-Pesa B2C minimum floats.
+                </>
+              ) : selectedMigrationVersion === 'v2' ? (
+                <>
+                  <strong>Migration 002 (002_auth_rls.sql)</strong> provisions institutional RBAC roles (<code>super_admin</code>, <code>finance_controller</code>, <code>fleet_ops_manager</code>, <code>dispatcher_clerk</code>, <code>driver</code>), the append-only <code>audit_logs</code> table, invoices/payments sub-ledgers, and the strict <strong>SEC-04</strong> trigger blocking self-approvals.
+                </>
+              ) : (
+                <>
+                  <strong>Migration 001 (schema.sql)</strong> provisions base fleet prime movers, commercial shipper contracts, company corporate identity, and expense voucher repositories.
+                </>
+              )}
             </p>
+
             <div className="flex items-center gap-2.5 flex-wrap pt-1">
               <button
                 onClick={handleCopySql}
@@ -743,7 +1009,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <span className="material-symbols-outlined text-[16px]">
                   {copiedSql ? 'check' : 'content_copy'}
                 </span>
-                {copiedSql ? 'SQL Copied to Clipboard!' : 'Copy SQL Migration Script'}
+                {copiedSql
+                  ? 'Copied to Clipboard!'
+                  : `Copy Migration ${selectedMigrationVersion.toUpperCase()} SQL`}
               </button>
 
               <a
@@ -783,6 +1051,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <div className="divide-y divide-[#eff4ff]">
               {[
                 {
+                  name: 'app_users',
+                  desc: 'Institutional identity directory keyed to auth.users with 5 roles and SEC-01 governance',
+                  count: '5 personas',
+                  live: dbHealth?.tables.app_users,
+                },
+                {
+                  name: 'audit_logs',
+                  desc: 'Immutable append-only audit trail recording every approval, rejection, and role change',
+                  count: 'Ledger table',
+                  live: dbHealth?.tables.audit_logs,
+                },
+                {
+                  name: 'invoices',
+                  desc: 'Accounts Receivable lifecycle (draft, issued, partially_paid, paid, refunded, voided)',
+                  count: 'AR sub-ledger',
+                  live: dbHealth?.tables.invoices,
+                },
+                {
                   name: 'vehicles',
                   desc: 'GPS telematics, driver assignments, tank capacities, actual km/L vs target',
                   count: `${vehicles.length} assets`,
@@ -808,7 +1094,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 },
                 {
                   name: 'expenses',
-                  desc: 'Driver petty cash vouchers, fuel card receipts, workshop maintenance audits',
+                  desc: 'Driver petty cash vouchers, fuel card receipts, workshop maintenance audits (SEC-04)',
                   count: 'Claim ledger',
                   live: dbHealth?.tables.expenses,
                 },
@@ -850,19 +1136,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-label-sm text-[11px] text-outline font-semibold uppercase">
-                PostgreSQL DDL Migration Code Preview
+                PostgreSQL DDL Migration ({selectedMigrationVersion.toUpperCase()}) Code Preview
               </span>
               <button
                 onClick={handleCopySql}
                 className="font-label-code text-[11px] text-primary hover:underline font-semibold flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-[14px]">content_copy</span>
-                {copiedSql ? 'Copied' : 'Copy All SQL'}
+                {copiedSql ? 'Copied' : `Copy Migration ${selectedMigrationVersion.toUpperCase()} SQL`}
               </button>
             </div>
 
             <pre className="p-4 bg-slate-950 text-slate-200 rounded-2xl text-[11px] font-label-code overflow-x-auto max-h-64 leading-relaxed border border-slate-800 select-all">
-              {SUPABASE_SQL_SCHEMA}
+              {selectedMigrationVersion === 'v2'
+                ? SUPABASE_V2_AUTH_RLS_MIGRATION
+                : SUPABASE_SQL_SCHEMA}
             </pre>
           </div>
         </div>

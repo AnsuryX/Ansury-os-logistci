@@ -218,3 +218,242 @@ INSERT INTO public.customers (
 ('cust-5', 'DALBIT PETROLEUM KENYA / DRC CORRIDOR', 'P051184920M', 'Eldoret - Malaba - Goma DRC Transit', 'Low Sulphur Gasoil & Mining Fuel Supplies', 'Moses Kiprotich (Northern Corridor Freight Ops)', '+254 20 3753000', 'ops@dalbitpetroleum.com', 'USD', 450, 18900.00, 0.00, 14, 1, 'Contract Active', 'Delta Corner Annex, Westlands, Nairobi, Kenya', '30 Nov 2027')
 ON CONFLICT (name) DO NOTHING;
 `;
+
+export const SUPABASE_V2_AUTH_RLS_MIGRATION = `-- ====================================================================
+-- ANSURY OS / BEYAYAN LIMITED - SUPABASE MIGRATION 002
+-- Authentication, RBAC Role Matrix, SEC-04 Governance & Audit Trail
+-- Target: Supabase PostgreSQL (auth.users integration)
+-- ====================================================================
+
+-- 1. EXTENSIONS
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 2. APP USERS DIRECTORY TABLE (Keyed to Supabase auth.users)
+CREATE TABLE IF NOT EXISTS public.app_users (
+    id UUID PRIMARY KEY,
+    role TEXT NOT NULL CHECK (role IN ('super_admin', 'finance_controller', 'fleet_ops_manager', 'dispatcher_clerk', 'driver')),
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    phone TEXT,
+    location TEXT DEFAULT 'Nairobi Central Operating Hub',
+    assigned_truck TEXT,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_by UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_users_role ON public.app_users(role);
+CREATE INDEX IF NOT EXISTS idx_app_users_email ON public.app_users(email);
+CREATE INDEX IF NOT EXISTS idx_app_users_active ON public.app_users(active);
+
+-- 3. IMMUTABLE AUDIT LOGS TABLE
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    timestamp TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    actor_id UUID,
+    actor_name TEXT NOT NULL,
+    actor_role TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('CREATE', 'UPDATE', 'DELETE_SOFT', 'RECONCILE', 'APPROVE', 'REJECT', 'REFUND', 'OVERRIDE', 'LOGIN', 'ROLE_CHANGE', 'VOID')),
+    entity_type TEXT NOT NULL CHECK (entity_type IN ('INVOICE', 'EXPENSE', 'BANK_TRANSACTION', 'VEHICLE', 'CUSTOMER', 'USER', 'FLOAT_ALLOCATION', 'SYSTEM_RULE', 'SETTINGS')),
+    entity_id TEXT NOT NULL,
+    previous_value TEXT,
+    new_value TEXT,
+    reason TEXT,
+    ip_hash TEXT NOT NULL DEFAULT 'sha256-local'
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON public.audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON public.audit_logs(actor_name);
+
+-- 4. INVOICES & AR TABLE
+CREATE TABLE IF NOT EXISTS public.invoices (
+    id TEXT PRIMARY KEY,
+    invoice_number TEXT NOT NULL UNIQUE,
+    customer_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    issue_date DATE NOT NULL,
+    due_date DATE NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD' CHECK (currency IN ('USD', 'KES')),
+    total_amount NUMERIC NOT NULL,
+    paid_amount NUMERIC NOT NULL DEFAULT 0,
+    remaining_balance NUMERIC NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'issued', 'partially_paid', 'paid', 'overdue', 'refunded', 'voided')),
+    corridor TEXT NOT NULL,
+    waybill_number TEXT NOT NULL,
+    truck_reg TEXT NOT NULL,
+    cargo_description TEXT NOT NULL,
+    rate_per_unit NUMERIC,
+    quantity NUMERIC,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    deleted_at TIMESTAMPTZ,
+    deleted_reason TEXT,
+    actor_id UUID
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_customer ON public.invoices(customer_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);
+
+-- 5. INVOICE PAYMENTS TABLE
+CREATE TABLE IF NOT EXISTS public.invoice_payments (
+    id TEXT PRIMARY KEY,
+    invoice_id TEXT NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+    payment_date DATE NOT NULL,
+    amount NUMERIC NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'USD' CHECK (currency IN ('USD', 'KES')),
+    method TEXT NOT NULL CHECK (method IN ('SWIFT Wire', 'RTGS', 'M-PESA', 'Cheque')),
+    reference TEXT NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON public.invoice_payments(invoice_id);
+
+-- 6. UPGRADE EXPENSES & RECONCILIATION TABLES
+DO $$
+BEGIN
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS deleted_reason TEXT;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS actor_id UUID;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS submitter_id UUID;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS approved_by TEXT;
+    ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS approval_notes TEXT;
+    ALTER TABLE public.reconciliation_txns ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+    ALTER TABLE public.reconciliation_txns ADD COLUMN IF NOT EXISTS deleted_reason TEXT;
+    ALTER TABLE public.reconciliation_txns ADD COLUMN IF NOT EXISTS actor_id UUID;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- 7. RBAC FUNCTIONS: current_role() & has_role()
+CREATE OR REPLACE FUNCTION public.current_role()
+RETURNS TEXT AS $$
+DECLARE
+    v_role TEXT;
+BEGIN
+    SELECT role INTO v_role
+    FROM public.app_users
+    WHERE id = auth.uid() AND active = true;
+
+    IF v_role IS NOT NULL THEN
+        RETURN v_role;
+    END IF;
+
+    v_role := auth.jwt() -> 'user_metadata' ->> 'role';
+    IF v_role IS NOT NULL THEN
+        RETURN v_role;
+    END IF;
+
+    RETURN 'anon';
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.has_role(allowed_roles TEXT[])
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN public.current_role() = ANY(allowed_roles);
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+-- 8. SEC-04 NO SELF-APPROVAL TRIGGER
+CREATE OR REPLACE FUNCTION public.enforce_sec04_no_self_approval()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_current_user_name TEXT;
+BEGIN
+    IF NEW.status = 'approved' AND (OLD.status IS DISTINCT FROM 'approved') THEN
+        IF NEW.submitter_id IS NOT NULL AND NEW.submitter_id = auth.uid() THEN
+            RAISE EXCEPTION 'SEC-04 Violation: Claimants cannot approve their own expenses.';
+        END IF;
+
+        SELECT full_name INTO v_current_user_name FROM public.app_users WHERE id = auth.uid();
+        IF v_current_user_name IS NOT NULL AND LOWER(TRIM(NEW.claimant)) = LOWER(TRIM(v_current_user_name)) THEN
+            RAISE EXCEPTION 'SEC-04 Violation: Claimants cannot authorize their own corridor expense claim (%s).', NEW.claimant;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_sec04_no_self_approval ON public.expenses;
+CREATE TRIGGER trg_sec04_no_self_approval
+    BEFORE UPDATE ON public.expenses
+    FOR EACH ROW
+    EXECUTE FUNCTION public.enforce_sec04_no_self_approval();
+
+-- 9. REAL ROLE-BASED RLS POLICIES
+ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.invoice_payments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "app_users_select_authenticated" ON public.app_users;
+CREATE POLICY "app_users_select_authenticated" ON public.app_users FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "app_users_admin_write" ON public.app_users;
+CREATE POLICY "app_users_admin_write" ON public.app_users FOR ALL TO authenticated USING (public.has_role(ARRAY['super_admin'])) WITH CHECK (public.has_role(ARRAY['super_admin']));
+
+DROP POLICY IF EXISTS "audit_logs_select_authorized" ON public.audit_logs;
+CREATE POLICY "audit_logs_select_authorized" ON public.audit_logs FOR SELECT TO authenticated USING (public.has_role(ARRAY['super_admin', 'finance_controller']));
+
+DROP POLICY IF EXISTS "audit_logs_insert_authenticated" ON public.audit_logs;
+CREATE POLICY "audit_logs_insert_authenticated" ON public.audit_logs FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "invoices_read_all" ON public.invoices;
+CREATE POLICY "invoices_read_all" ON public.invoices FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "invoices_write_finance" ON public.invoices;
+CREATE POLICY "invoices_write_finance" ON public.invoices FOR ALL TO authenticated USING (public.has_role(ARRAY['super_admin', 'finance_controller'])) WITH CHECK (public.has_role(ARRAY['super_admin', 'finance_controller']));
+
+DROP POLICY IF EXISTS "invoice_payments_read_all" ON public.invoice_payments;
+CREATE POLICY "invoice_payments_read_all" ON public.invoice_payments FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "invoice_payments_write_finance" ON public.invoice_payments;
+CREATE POLICY "invoice_payments_write_finance" ON public.invoice_payments FOR ALL TO authenticated USING (public.has_role(ARRAY['super_admin', 'finance_controller'])) WITH CHECK (public.has_role(ARRAY['super_admin', 'finance_controller']));
+`;
+
+export const SUPABASE_V3_SYSTEM_SETTINGS_MIGRATION = `-- ====================================================================
+-- ANSURY OS / BEYAYAN LIMITED - SUPABASE MIGRATION 003
+-- System Settings, Fleet Telematics Rules & Treasury Parameters
+-- Target: Supabase PostgreSQL (public.system_settings)
+-- ====================================================================
+
+CREATE TABLE IF NOT EXISTS public.system_settings (
+    id TEXT PRIMARY KEY DEFAULT 'ansury_fleet_default',
+    target_fuel_benchmark NUMERIC(5,2) NOT NULL DEFAULT 2.40,
+    fuel_spike_threshold NUMERIC(5,2) NOT NULL DEFAULT 12.50,
+    demurrage_rate_usd NUMERIC(10,2) NOT NULL DEFAULT 250.00,
+    weighbridge_tolerance_pct NUMERIC(5,2) NOT NULL DEFAULT 0.50,
+    speed_limit_kmh INTEGER NOT NULL DEFAULT 80,
+    night_curfew_enabled BOOLEAN NOT NULL DEFAULT true,
+    mpesa_min_float_kes NUMERIC(12,2) NOT NULL DEFAULT 250000.00,
+    auto_match_swift BOOLEAN NOT NULL DEFAULT true,
+    petty_cash_daily_limit_kes NUMERIC(12,2) NOT NULL DEFAULT 100000.00,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_by TEXT DEFAULT 'Super Administrator'
+);
+
+ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "system_settings_read_all" ON public.system_settings;
+CREATE POLICY "system_settings_read_all" ON public.system_settings
+    FOR SELECT TO authenticated
+    USING (true);
+
+DROP POLICY IF EXISTS "system_settings_write_authorized" ON public.system_settings;
+CREATE POLICY "system_settings_write_authorized" ON public.system_settings
+    FOR ALL TO authenticated
+    USING (public.has_role(ARRAY['super_admin', 'finance_controller']))
+    WITH CHECK (public.has_role(ARRAY['super_admin', 'finance_controller']));
+
+INSERT INTO public.system_settings (
+    id, target_fuel_benchmark, fuel_spike_threshold, demurrage_rate_usd,
+    weighbridge_tolerance_pct, speed_limit_kmh, night_curfew_enabled,
+    mpesa_min_float_kes, auto_match_swift, petty_cash_daily_limit_kes, updated_by
+) VALUES (
+    'ansury_fleet_default', 2.40, 12.50, 250.00, 0.50, 80, true, 250000.00, true, 100000.00, 'System Bootstrap'
+) ON CONFLICT (id) DO NOTHING;
+`;
+

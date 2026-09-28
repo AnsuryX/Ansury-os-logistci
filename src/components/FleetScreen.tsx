@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Vehicle } from '../types';
 import { AddVehicleModal } from './AddVehicleModal';
+import { useAuth } from '../lib/auth';
 
 interface FleetScreenProps {
   vehicles: Vehicle[];
@@ -13,6 +14,7 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
   onAddVehicle,
   viewMode = 'fleet',
 }) => {
+  const { role, permissions } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -103,13 +105,21 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
             </button>
           </div>
 
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-primary text-on-primary font-body-sm text-[12px] font-semibold shadow-sm hover:bg-primary-container transition-all flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[16px]">add</span>
-            Add Fleet Asset
-          </button>
+          {role === 'driver' ? (
+            <div className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-600 font-body-sm text-[12px] font-semibold flex items-center gap-1.5 border border-slate-200">
+              <span className="material-symbols-outlined text-[16px] text-slate-500">visibility</span>
+              <span>Driver (Read-Only)</span>
+            </div>
+          ) : (
+            <button
+              disabled={!permissions.canEditFleet}
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-primary text-on-primary font-body-sm text-[12px] font-semibold shadow-sm hover:bg-primary-container transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Add Fleet Asset
+            </button>
+          )}
         </div>
       </div>
 

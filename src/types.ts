@@ -15,6 +15,8 @@ export type NavigationPath =
   | 'financial-statements'
   | 'ansury-ai-cfo'
   | 'launch-qc'
+  | 'audit-logs'
+  | 'user-management'
   | 'settings';
 
 export interface Customer {
@@ -142,6 +144,9 @@ export interface ReconcileTransaction {
   erpSubtitle: string;
   erpDetails: string;
   status: 'review' | 'matched' | 'unmatched' | 'suspicious';
+  deletedAt?: string;
+  deletedReason?: string;
+  actorId?: string;
 }
 
 export interface ExpenseClaim {
@@ -158,6 +163,9 @@ export interface ExpenseClaim {
   driverId: string;
   submittedTime: string;
   submittedBy: string;
+  submitterId?: string;
+  approvedBy?: string;
+  approvalNotes?: string;
   telemetryPass: boolean;
   telemetryNote?: string;
   varianceFlag?: boolean;
@@ -165,6 +173,9 @@ export interface ExpenseClaim {
   missingReceipt?: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'held';
   receiptAttached?: boolean;
+  deletedAt?: string;
+  deletedReason?: string;
+  actorId?: string;
 }
 
 export interface TripEconomics {
@@ -218,15 +229,74 @@ export interface Invoice {
   ratePerTonneOrLitre?: number;
   quantity?: number;
   paymentHistory: InvoicePayment[];
+  deletedAt?: string;
+  deletedReason?: string;
+  actorId?: string;
 }
+
+export interface AppUser {
+  id: string;
+  email: string;
+  fullName: string;
+  role: 'super_admin' | 'finance_controller' | 'fleet_ops_manager' | 'dispatcher_clerk' | 'driver';
+  phone?: string;
+  location?: string;
+  assignedTruck?: string;
+  active: boolean;
+  createdAt?: string;
+  lastActive?: string;
+  createdBy?: string;
+}
+
+export type AuditActionType =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'DELETE_SOFT'
+  | 'RECONCILE'
+  | 'APPROVE'
+  | 'REJECT'
+  | 'REFUND'
+  | 'OVERRIDE'
+  | 'LOGIN'
+  | 'ROLE_CHANGE'
+  | 'VOID'
+  | 'VEHICLE_ADD'
+  | 'CUSTOMER_CREATE'
+  | 'SETTINGS_UPDATE'
+  | 'RECONCILE_MATCH'
+  | 'RECONCILE_REJECT'
+  | 'RECONCILE_CLASSIFY'
+  | 'EXPENSE_SUBMIT'
+  | 'EXPENSE_APPROVE'
+  | 'EXPENSE_REJECT'
+  | 'EXPENSE_HOLD'
+  | 'INVOICE_CREATE'
+  | 'PAYMENT_RECEIVE'
+  | 'USER_INVITE'
+  | 'ROLE_ASSIGN'
+  | 'USER_ACTIVATE'
+  | 'USER_DEACTIVATE';
+
+export type AuditEntityType =
+  | 'INVOICE'
+  | 'INVOICE_PAYMENT'
+  | 'EXPENSE'
+  | 'BANK_TRANSACTION'
+  | 'RECONCILIATION_TXN'
+  | 'VEHICLE'
+  | 'CUSTOMER'
+  | 'USER'
+  | 'FLOAT_ALLOCATION'
+  | 'SYSTEM_RULE'
+  | 'SETTINGS';
 
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
   actorName: string;
   actorRole: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE_SOFT' | 'RECONCILE' | 'APPROVE' | 'REJECT' | 'REFUND' | 'OVERRIDE';
-  entityType: 'INVOICE' | 'EXPENSE' | 'BANK_TRANSACTION' | 'VEHICLE' | 'FLOAT_ALLOCATION' | 'SYSTEM_RULE';
+  action: AuditActionType;
+  entityType: AuditEntityType;
   entityId: string;
   previousValue?: string;
   newValue?: string;
@@ -243,4 +313,32 @@ export interface StressTestCheck {
   status: 'passed' | 'failed' | 'running';
   liveProof: string;
   details?: string;
+}
+
+export interface SystemSettings {
+  id: string;
+  targetFuelBenchmark: number;
+  fuelSpikeThreshold: number;
+  demurrageRateUsd: number;
+  weighbridgeTolerancePct: number;
+  speedLimitKmh: number;
+  nightCurfewEnabled: boolean;
+  mpesaMinFloatKes: number;
+  autoMatchSwift: boolean;
+  pettyCashDailyLimitKes: number;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface AnomalyIncident {
+  id: string;
+  title: string;
+  location: string;
+  severity: 'CRITICAL' | 'HIGH AUDIT' | 'KRA COMPLIANCE' | 'WARNING';
+  severityColor: string;
+  timestamp: string;
+  details: string;
+  impact: string;
+  actionText: string;
+  isResolved?: boolean;
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ExpenseClaim } from '../types';
+import { useAuth } from '../lib/auth';
 
 interface ReceiptAuditModalProps {
   claim: ExpenseClaim | null;
@@ -16,7 +17,16 @@ export const ReceiptAuditModal: React.FC<ReceiptAuditModalProps> = ({
   onApprove,
   onReject,
 }) => {
+  const { user, role, permissions } = useAuth();
   if (!isOpen || !claim) return null;
+
+  const isSelfApproval = Boolean(
+    user?.fullName &&
+      (claim.submittedBy?.toLowerCase() === user.fullName.toLowerCase() ||
+        claim.driverName?.toLowerCase() === user.fullName.toLowerCase())
+  );
+  const canApprove = permissions.canApproveExpenses && !isSelfApproval;
+  const isDriver = role === 'driver';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -154,17 +164,36 @@ export const ReceiptAuditModal: React.FC<ReceiptAuditModalProps> = ({
                 Allocated to <strong>{claim.dispatchId}</strong>. Unit trip fuel ratio will recalibrate from 26.4% to 27.2%.
               </div>
             </div>
+
+            {isSelfApproval && (
+              <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+                <span className="material-symbols-outlined text-amber-700 text-[18px] shrink-0">gavel</span>
+                <div>
+                  <strong>SEC-04 Self-Approval Prohibition:</strong> You are logged in as the claimant or submitter of this voucher. Independent Controller approval is strictly mandatory.
+                </div>
+              </div>
+            )}
+
+            {isDriver && (
+              <div className="p-3 bg-slate-100 border border-slate-300 rounded-xl text-slate-700 text-xs flex items-start gap-2">
+                <span className="material-symbols-outlined text-slate-500 text-[18px] shrink-0">visibility</span>
+                <div>
+                  <strong>Driver Read-Only Access:</strong> Vouchers can be inspected, but approvals and rejections are reserved for authorized controllers.
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Modal Actions */}
         <div className="p-space-md bg-surface-container-low flex items-center justify-between border-t border-[#e5eeff]">
           <button
+            disabled={!permissions.canApproveExpenses}
             onClick={() => {
               onReject(claim.id);
               onClose();
             }}
-            className="px-4 py-2 rounded-lg text-error hover:bg-error-container/30 font-body-md text-[13px] font-semibold transition-colors"
+            className="px-4 py-2 rounded-lg text-error hover:bg-error-container/30 font-body-md text-[13px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Reject Claim
           </button>
@@ -176,14 +205,15 @@ export const ReceiptAuditModal: React.FC<ReceiptAuditModalProps> = ({
               Close
             </button>
             <button
+              disabled={!canApprove}
               onClick={() => {
                 onApprove(claim.id);
                 onClose();
               }}
-              className="px-4 py-2 rounded-lg bg-primary text-on-primary font-body-md text-[13px] font-medium hover:bg-primary-container shadow-sm transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-primary text-on-primary font-body-md text-[13px] font-medium hover:bg-primary-container shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span className="material-symbols-outlined text-[16px]">check_circle</span>
-              Approve (KES {claim.amountKes.toLocaleString()})
+              {isSelfApproval ? 'Self-Approval Prohibited' : `Approve (KES ${claim.amountKes.toLocaleString()})`}
             </button>
           </div>
         </div>
