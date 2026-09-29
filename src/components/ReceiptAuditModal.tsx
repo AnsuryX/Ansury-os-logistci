@@ -67,51 +67,78 @@ export const ReceiptAuditModal: React.FC<ReceiptAuditModalProps> = ({
 
         {/* Content Body: Two-column Comparison */}
         <div className="p-space-lg grid grid-cols-1 md:grid-cols-2 gap-space-lg max-h-[75vh] overflow-y-auto">
-          {/* Left: Scanned ETR Fiscal Receipt mockup */}
-          <div className="bg-[#fffdf7] border border-[#e2d7c0] rounded-xl p-4 shadow-sm font-mono text-[11px] text-slate-800 space-y-2">
-            <div className="text-center pb-2 border-b border-dashed border-[#c7b99c]">
-              <div className="font-bold text-[13px] tracking-wider">SHELL ELDORET BYPASS</div>
-              <div>VIVO ENERGY KENYA LTD</div>
-              <div>PIN: P051189240L • VAT REGISTERED</div>
-              <div>ETR SERIAL: KRA00291049</div>
-            </div>
-
-            <div className="py-1 border-b border-dashed border-[#c7b99c] flex justify-between">
-              <span>RECEIPT NO: 0049219</span>
-              <span>TIME: 14:08 EAT</span>
-            </div>
-
-            <div className="py-1 border-b border-dashed border-[#c7b99c] flex justify-between">
-              <span>VEHICLE: KDA 542T</span>
-              <span>PUMP: 04 (HIGH-FLOW)</span>
-            </div>
-
-            <div className="py-2 border-b border-dashed border-[#c7b99c] space-y-1">
-              <div className="flex justify-between font-bold">
-                <span>DIESEL 50PPM (ULS)</span>
-                <span>KES {claim.amountKes.toLocaleString()}</span>
+          {/* Left: Scanned ETR Fiscal Receipt or Uploaded Document */}
+          <div className="space-y-3">
+            {claim.receiptDataUrl ? (
+              <div className="bg-[#fffdf7] border border-[#e2d7c0] rounded-xl p-3 shadow-sm space-y-2">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[#e2d7c0]">
+                  <span className="font-label-sm text-[11px] font-bold text-slate-800 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[16px] text-tertiary">image</span>
+                    Uploaded Receipt Document ({claim.receiptFileName || 'Evidence'})
+                  </span>
+                  <span className="font-label-code text-[10px] text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                    Real Attachment
+                  </span>
+                </div>
+                <div className="max-h-72 overflow-hidden rounded-lg border border-[#e2d7c0] flex items-center justify-center bg-slate-900/5">
+                  <img
+                    src={claim.receiptDataUrl}
+                    alt="Receipt Evidence"
+                    className="max-h-72 w-auto object-contain rounded-lg shadow-xs"
+                  />
+                </div>
+                <div className="font-mono text-[11px] text-slate-700 bg-white p-2 rounded border border-[#e2d7c0] flex justify-between">
+                  <span>Claim: {claim.claimNumber}</span>
+                  <span className="font-bold text-slate-900">KES {claim.amountKes.toLocaleString()}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span>210.00 LITRES @ 180.00</span>
-                <span>(16% VAT INCL)</span>
-              </div>
-            </div>
+            ) : null}
 
-            <div className="py-1 border-b border-dashed border-[#c7b99c] space-y-0.5">
-              <div className="flex justify-between">
-                <span>PAYMENT: M-PESA B2B</span>
-                <span className="font-bold">{claim.mpesaRef}</span>
+            <div className="bg-[#fffdf7] border border-[#e2d7c0] rounded-xl p-4 shadow-sm font-mono text-[11px] text-slate-800 space-y-2">
+              <div className="text-center pb-2 border-b border-dashed border-[#c7b99c]">
+                <div className="font-bold text-[13px] tracking-wider">{claim.vendor.toUpperCase()}</div>
+                <div>AUTHORISED CORRIDOR REFUELING POINT</div>
+                <div>PIN: P051189240L • VAT REGISTERED (16%)</div>
+                <div>ETR SERIAL: KRA00{claim.claimNumber.replace(/[^0-9]/g, '') || '291049'}</div>
               </div>
-              <div className="flex justify-between text-[10px] text-slate-500">
-                <span>CASHIER: J. MAINA</span>
-                <span>STATUS: COMPLETE</span>
-              </div>
-            </div>
 
-            <div className="text-center pt-2 text-[10px] text-slate-500">
-              *** KRA TIMS COMPLIANT FISCAL CODE ***
-              <br />
-              D829-410A-9082-FA19
+              <div className="py-1 border-b border-dashed border-[#c7b99c] flex justify-between">
+                <span>RECEIPT: #{claim.claimNumber}</span>
+                <span>TIME: {claim.submittedTime}</span>
+              </div>
+
+              <div className="py-1 border-b border-dashed border-[#c7b99c] flex justify-between">
+                <span>VEHICLE: {claim.truckAsset}</span>
+                <span>DRIVER: {claim.driverName}</span>
+              </div>
+
+              <div className="py-2 border-b border-dashed border-[#c7b99c] space-y-1">
+                <div className="flex justify-between font-bold">
+                  <span>{claim.category.toUpperCase()}</span>
+                  <span>KES {claim.amountKes.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>16% VAT INCLUDED:</span>
+                  <span>KES {((claim.amountKes * 0.16) / 1.16).toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="py-1 border-b border-dashed border-[#c7b99c] space-y-0.5">
+                <div className="flex justify-between">
+                  <span>PAYMENT REF:</span>
+                  <span className="font-bold">{claim.mpesaRef}</span>
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-500">
+                  <span>DISPATCH: {claim.dispatchId}</span>
+                  <span>STATUS: {claim.status.toUpperCase()}</span>
+                </div>
+              </div>
+
+              <div className="text-center pt-2 text-[10px] text-slate-500">
+                *** KRA TIMS COMPLIANT FISCAL QR CODE ***
+                <br />
+                D829-410A-{claim.id.slice(-4).toUpperCase()}-FA19
+              </div>
             </div>
           </div>
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ExpenseClaim } from '../types';
 import { useAuth } from '../lib/auth';
+import { downloadCsv } from '../utils/format';
 
 interface ExpensesScreenProps {
   expenses: ExpenseClaim[];
@@ -32,6 +33,48 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const handleExportKraSchedule = () => {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = [
+      'Claim Number',
+      'Submission Date',
+      'Expense Category',
+      'Amount (KES)',
+      '16% VAT Included (KES)',
+      'Vendor / Merchant',
+      'M-Pesa / Bank Reference',
+      'Truck Asset Plate',
+      'Corridor Route',
+      'Driver Name',
+      'Submitted By',
+      'Approved By',
+      'Approval Status',
+      'CANBUS Telemetry Verification',
+      'Receipt Attachment Status',
+    ];
+
+    const rows = filteredExpenses.map((e) => [
+      e.claimNumber,
+      e.submittedTime,
+      e.category,
+      e.amountKes,
+      Number(((e.amountKes * 0.16) / 1.16).toFixed(2)),
+      e.vendor,
+      e.mpesaRef,
+      e.truckAsset,
+      e.route,
+      e.driverName,
+      e.submittedBy,
+      e.approvedBy || 'Pending',
+      e.status.toUpperCase(),
+      e.telemetryPass ? 'PASSED — Odometer Verified' : 'FLAGGED',
+      e.receiptAttached ? 'ATTACHED (ETR Scanned)' : 'MISSING',
+    ]);
+
+    downloadCsv(`Ansury_KRA_Section23_Expense_Schedule_${dateStr}.csv`, [headers, ...rows]);
+    triggerToast(`Exported ${filteredExpenses.length} expense vouchers to KRA tax schedule CSV!`);
+  };
+
   const filteredExpenses = expenses.filter((e) => {
     const matchesSearch =
       e.claimNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -44,8 +87,8 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   });
 
   const pendingCount = expenses.filter((e) => e.status === 'pending').length;
-  const approvedCount = 42 + expenses.filter((e) => e.status === 'approved').length;
-  const rejectedCount = 3 + expenses.filter((e) => e.status === 'rejected').length;
+  const approvedCount = expenses.filter((e) => e.status === 'approved').length;
+  const rejectedCount = expenses.filter((e) => e.status === 'rejected').length;
 
   return (
     <div className="p-space-lg space-y-space-lg pb-16">
@@ -111,11 +154,12 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           </div>
 
           <button
-            onClick={() => triggerToast('Generating KRA Section 23 Fuel & Haulage Tax Schedule (PDF)...')}
+            onClick={handleExportKraSchedule}
             className="px-3.5 py-1.5 rounded-xl bg-surface-container-lowest border border-[#dce9ff] hover:bg-surface-container text-on-surface font-body-sm text-[12px] font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+            title="Download KRA Tax Schedule CSV"
           >
             <span className="material-symbols-outlined text-[16px]">file_download</span>
-            Export KRA Schedule
+            Export KRA Schedule (.csv)
           </button>
 
           <button

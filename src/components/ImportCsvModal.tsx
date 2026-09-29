@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ReconcileTransaction } from '../types';
+import { parseCsv } from '../utils/format';
 
 interface ImportCsvModalProps {
   isOpen: boolean;
@@ -31,41 +32,75 @@ export const ImportCsvModal: React.FC<ImportCsvModalProps> = ({
   if (!isOpen) return null;
 
   const parseCsvLines = (content: string): ReconcileTransaction[] => {
-    const lines = content.trim().split('\n');
-    if (lines.length <= 1) return [];
+    const rawRows = parseCsv(content.trim());
+    if (rawRows.length <= 1) return [];
+
+    const headers = rawRows[0].map((h) => (h || '').toLowerCase().trim());
+
+    // Dynamically detect column indices
+    let refIdx = headers.findIndex((h) => h.includes('receipt') || h.includes('ref') || h.includes('trans') || h.includes('id') || h.includes('code'));
+    if (refIdx === -1) refIdx = 0;
+
+    let timeIdx = headers.findIndex((h) => h.includes('time') || h.includes('date') || h.includes('timestamp'));
+    if (timeIdx === -1) timeIdx = 1;
+
+    let merchantIdx = headers.findIndex((h) => h.includes('detail') || h.includes('merchant') || h.includes('party') || h.includes('desc') || h.includes('payee') || h.includes('vendor'));
+    if (merchantIdx === -1) merchantIdx = 2;
+
+    let paidOutIdx = headers.findIndex((h) => h.includes('paid out') || h.includes('debit') || h.includes('outflow') || h.includes('withdrawal'));
+    let paidInIdx = headers.findIndex((h) => h.includes('paid in') || h.includes('credit') || h.includes('inflow') || h.includes('deposit'));
+    let amountIdx = headers.findIndex((h) => h.includes('amount') || h.includes('total') || h.includes('kes') || h.includes('value'));
+
+    let plateIdx = headers.findIndex((h) => h.includes('plate') || h.includes('truck') || h.includes('reg') || h.includes('vehicle') || h.includes('asset'));
 
     const parsed: ReconcileTransaction[] = [];
-    // Skip header line
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
+    const seenRefs = new Set<string>();
 
-      const cols = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-      if (cols.length < 4) continue;
+    for (let i = 1; i < rawRows.length; i++) {
+      const cols = rawRows[i];
+      if (!cols || cols.length === 0 || cols.every((c) => !c || c.trim() === '')) continue;
 
-      const ref = cols[0] || `TXN-CSV-${Date.now()}-${i}`;
-      const dateTime = cols[1] || '2026-09-25 12:00:00';
-      const [datePart, timePart] = dateTime.split(' ');
-      const merchant = cols[2] || 'Corridor Service Provider';
-      const paidOut = parseFloat(cols[3]) || 0;
-      const paidIn = parseFloat(cols[4]) || 0;
-      const amount = paidOut > 0 ? paidOut : paidIn;
-      const type = paidOut > 0 ? ('debit' as const) : ('credit' as const);
-      const plate = cols[5] || 'KDA 542T';
+      const ref = cols[refIdx] ? cols[refIdx].trim() : `TXN-CSV-${Date.now().toString().slice(-6)}-${i}`;
+      if (deduplicate && seenRefs.has(ref.toLowerCase())) {
+        continue;
+      }
+      seenRefs.add(ref.toLowerCase());
+
+      const dateTime = cols[timeIdx] ? cols[timeIdx].trim() : new Date().toISOString().replace('T', ' ').slice(0, 19);
+      const [datePart, timePart] = dateTime.includes(' ') ? dateTime.split(' ') : [dateTime, '12:00:00'];
+      const merchant = cols[merchantIdx] ? cols[merchantIdx].trim() : 'Corridor Merchant / Payee';
+
+      let amount = 0;
+      if (paidOutIdx !== -1 && cols[paidOutIdx]) {
+        amount = parseFloat(String(cols[paidOutIdx]).replace(/[\$,\s]/g, '')) || 0;
+      }
+      if (amount === 0 && paidInIdx !== -1 && cols[paidInIdx]) {
+        amount = parseFloat(String(cols[paidInIdx]).replace(/[\$,\s]/g, '')) || 0;
+      }
+      if (amount === 0 && amountIdx !== -1 && cols[amountIdx]) {
+        amount = Math.abs(parseFloat(String(cols[amountIdx]).replace(/[\$,\s]/g, '')) || 0);
+      }
+      if (amount === 0 && cols[3]) {
+        amount = Math.abs(parseFloat(String(cols[3]).replace(/[\$,\s]/g, '')) || 0);
+      }
+
+      const plate = plateIdx !== -1 && cols[plateIdx] ? cols[plateIdx].trim() : 'Corridor Fleet';
 
       parsed.push({
-        id: `csv-${ref.toLowerCase()}-${i}`,
-        date: datePart || '2026-09-25',
-        time: timePart || '12:00 EAT',
+        id: `csv-${ref.toLowerCase().replace(/[^a-z0-9]/g, '')}-${i}`,
+        rawType: 'EQUITY B2C',
         ref,
-        source: 'Safaricom B2C',
+        timestamp: dateTime,
         merchantOrParty: merchant,
+        accountOrTarget: plate,
         amountKes: amount,
-        type,
-        status: 'review',
-        confidenceType: 'high',
+        confidencePct: 95,
+        confidenceLabel: 'Automated CSV Import Match',
+        confidenceType: 'verified',
         erpTitle: autoLinkPlate && plate ? `Corridor Outlay (${plate})` : 'Disbursement Pending Sub-Ledger',
-        erpSubtitle: `Ingested from ${fileName} • Statement ref ${ref}`,
+        erpSubtitle: `Ingested from ${fileName} • Ref: ${ref}`,
+        erpDetails: `Statement date: ${datePart} ${timePart || ''} • Raw Outlay: KES ${amount.toLocaleString()}`,
+        status: 'review',
       });
     }
 

@@ -30,6 +30,18 @@ interface SettingsScreenProps {
   customers?: Customer[];
   systemSettings?: SystemSettings;
   onUpdateSystemSettings?: (settings: SystemSettings) => void;
+  invoicesCount?: number;
+  transactionsCount?: number;
+  expensesCount?: number;
+  tripsCount?: number;
+  onPurgeDemoData?: (options: {
+    invoices: boolean;
+    transactions: boolean;
+    expenses: boolean;
+    trips: boolean;
+    all: boolean;
+  }) => void;
+  onRestoreDemoData?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -39,9 +51,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onUpdateUserProfile,
   vehicles = [],
   customers = [],
+  systemSettings,
+  onUpdateSystemSettings,
+  invoicesCount = 0,
+  transactionsCount = 0,
+  expensesCount = 0,
+  tripsCount = 0,
+  onPurgeDemoData,
+  onRestoreDemoData,
 }) => {
   const { role, user, resetPassword } = useAuth();
-  const [activeTab, setActiveTab] = useState<'company' | 'user' | 'users-mgmt' | 'fleet-rules' | 'treasury' | 'database'>('company');
+  const [activeTab, setActiveTab] = useState<'company' | 'user' | 'users-mgmt' | 'fleet-rules' | 'treasury' | 'database' | 'data-management'>('company');
+
+  // Purge demo data state
+  const [purgeInvoices, setPurgeInvoices] = useState(true);
+  const [purgeTransactions, setPurgeTransactions] = useState(true);
+  const [purgeExpenses, setPurgeExpenses] = useState(true);
+  const [purgeTrips, setPurgeTrips] = useState(true);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
 
   // Selected migration version in database tab
   const [selectedMigrationVersion, setSelectedMigrationVersion] = useState<'v3' | 'v2' | 'v1'>('v3');
@@ -323,6 +350,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span className="material-symbols-outlined text-[16px]">database</span>
           <span>Database & Cloud Sync</span>
           <span className="w-2 h-2 rounded-full bg-emerald-500 ml-1"></span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('data-management')}
+          className={`px-4 py-2 rounded-xl font-body-sm text-[12px] font-semibold transition-all flex items-center gap-1.5 ${
+            activeTab === 'data-management'
+              ? 'bg-rose-700 text-white shadow-sm'
+              : 'text-rose-700 hover:bg-rose-50 border border-rose-200'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+          <span>Purge Demo Data / Reset Slate</span>
         </button>
       </div>
 
@@ -1153,6 +1192,285 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 : SUPABASE_SQL_SCHEMA}
             </pre>
           </div>
+        </div>
+      )}
+
+      {/* TAB 7: DATA MANAGEMENT & SAMPLE DATA PURGE */}
+      {activeTab === 'data-management' && (
+        <div className="space-y-6">
+          {/* Warning Banner */}
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3">
+            <span className="material-symbols-outlined text-rose-600 text-[24px] shrink-0 mt-0.5">
+              warning
+            </span>
+            <div>
+              <h3 className="font-headline-sm text-[15px] font-bold text-rose-900">
+                Enterprise Ledger Reset & Demo Data Cleanup
+              </h3>
+              <p className="font-body-sm text-[12px] text-rose-800 mt-0.5 leading-relaxed">
+                Use this control center to remove simulated or sample demonstration data (invoices, payments, bank transactions, expenses, waybill dispatches) from the app. You can initialize a 100% clean production slate for real financial operations. An immutable audit trail entry is logged upon purge.
+              </p>
+            </div>
+          </div>
+
+          {/* Current Live Ledger Counts */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg border border-[#dce9ff] shadow-[0_1px_8px_rgba(0,0,0,0.03)] space-y-4">
+            <div className="border-b border-[#e5eeff] pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-headline-sm text-lg font-bold text-on-surface">
+                  Active Ledger Records & Sub-Ledger Inventory
+                </h3>
+                <p className="font-body-sm text-[12px] text-outline mt-0.5">
+                  Live counts across operational and financial stores currently active in memory and database.
+                </p>
+              </div>
+              <span className="font-label-code text-[11px] bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full font-bold border border-slate-300">
+                Institutional Scope
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
+              <div className="p-3 bg-surface-container-low rounded-xl border border-[#dce9ff]">
+                <span className="font-label-sm text-[10px] text-outline uppercase block font-semibold">Invoices / AR</span>
+                <span className="font-label-numeric text-xl font-bold text-on-surface block mt-1">{invoicesCount}</span>
+                <span className="text-[10px] text-outline font-label-code">Invoices</span>
+              </div>
+              <div className="p-3 bg-surface-container-low rounded-xl border border-[#dce9ff]">
+                <span className="font-label-sm text-[10px] text-outline uppercase block font-semibold">Bank / M-Pesa</span>
+                <span className="font-label-numeric text-xl font-bold text-on-surface block mt-1">{transactionsCount}</span>
+                <span className="text-[10px] text-outline font-label-code">Transactions</span>
+              </div>
+              <div className="p-3 bg-surface-container-low rounded-xl border border-[#dce9ff]">
+                <span className="font-label-sm text-[10px] text-outline uppercase block font-semibold">Expenses / Vouchers</span>
+                <span className="font-label-numeric text-xl font-bold text-on-surface block mt-1">{expensesCount}</span>
+                <span className="text-[10px] text-outline font-label-code">Claims</span>
+              </div>
+              <div className="p-3 bg-surface-container-low rounded-xl border border-[#dce9ff]">
+                <span className="font-label-sm text-[10px] text-outline uppercase block font-semibold">Trips & Dispatches</span>
+                <span className="font-label-numeric text-xl font-bold text-on-surface block mt-1">{tripsCount}</span>
+                <span className="text-[10px] text-outline font-label-code">Manifests</span>
+              </div>
+              <div className="p-3 bg-surface-container-low rounded-xl border border-[#dce9ff]">
+                <span className="font-label-sm text-[10px] text-outline uppercase block font-semibold">Fleet Assets</span>
+                <span className="font-label-numeric text-xl font-bold text-on-surface block mt-1">{vehicles.length}</span>
+                <span className="text-[10px] text-outline font-label-code">Prime Movers</span>
+              </div>
+              <div className="p-3 bg-surface-container-low rounded-xl border border-[#dce9ff]">
+                <span className="font-label-sm text-[10px] text-outline uppercase block font-semibold">Customers</span>
+                <span className="font-label-numeric text-xl font-bold text-on-surface block mt-1">{customers.length}</span>
+                <span className="text-[10px] text-outline font-label-code">Shippers</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Purge Selection Card */}
+          <div className="bg-surface-container-lowest rounded-2xl p-space-lg border border-[#dce9ff] shadow-[0_1px_8px_rgba(0,0,0,0.03)] space-y-4">
+            <div className="border-b border-[#e5eeff] pb-3 flex items-center justify-between">
+              <div>
+                <h3 className="font-headline-sm text-lg font-bold text-on-surface">
+                  Selective or Full Demo Data Purge
+                </h3>
+                <p className="font-body-sm text-[12px] text-outline mt-0.5">
+                  Select which modules you wish to wipe to an empty slate.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurgeInvoices(true);
+                    setPurgeTransactions(true);
+                    setPurgeExpenses(true);
+                    setPurgeTrips(true);
+                  }}
+                  className="text-[11px] text-primary font-bold hover:underline"
+                >
+                  Select All
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPurgeInvoices(false);
+                    setPurgeTransactions(false);
+                    setPurgeExpenses(false);
+                    setPurgeTrips(false);
+                  }}
+                  className="text-[11px] text-outline font-semibold hover:underline"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${purgeInvoices ? 'bg-rose-50/60 border-rose-300' : 'bg-surface-container-low border-[#dce9ff]'}`}>
+                <input
+                  type="checkbox"
+                  checked={purgeInvoices}
+                  onChange={(e) => setPurgeInvoices(e.target.checked)}
+                  className="mt-1 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-[13px] text-on-surface block">
+                    Invoices & Accounts Receivable ({invoicesCount} records)
+                  </span>
+                  <p className="text-[11px] text-outline mt-0.5">
+                    Wipes all sample freight invoices, partial payment histories, and resets Accounts Receivable (Account 1100) to $0.00.
+                  </p>
+                </div>
+              </label>
+
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${purgeTransactions ? 'bg-rose-50/60 border-rose-300' : 'bg-surface-container-low border-[#dce9ff]'}`}>
+                <input
+                  type="checkbox"
+                  checked={purgeTransactions}
+                  onChange={(e) => setPurgeTransactions(e.target.checked)}
+                  className="mt-1 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-[13px] text-on-surface block">
+                    Bank & M-Pesa Reconciliation Worktable ({transactionsCount} records)
+                  </span>
+                  <p className="text-[11px] text-outline mt-0.5">
+                    Wipes demo telecom and bank feed transactions awaiting matching. Ready for fresh CSV import.
+                  </p>
+                </div>
+              </label>
+
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${purgeExpenses ? 'bg-rose-50/60 border-rose-300' : 'bg-surface-container-low border-[#dce9ff]'}`}>
+                <input
+                  type="checkbox"
+                  checked={purgeExpenses}
+                  onChange={(e) => setPurgeExpenses(e.target.checked)}
+                  className="mt-1 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-[13px] text-on-surface block">
+                    Expense Claims & Corridor Vouchers ({expensesCount} records)
+                  </span>
+                  <p className="text-[11px] text-outline mt-0.5">
+                    Wipes driver fuel vouchers, toll receipts, and accommodation claims.
+                  </p>
+                </div>
+              </label>
+
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${purgeTrips ? 'bg-rose-50/60 border-rose-300' : 'bg-surface-container-low border-[#dce9ff]'}`}>
+                <input
+                  type="checkbox"
+                  checked={purgeTrips}
+                  onChange={(e) => setPurgeTrips(e.target.checked)}
+                  className="mt-1 rounded text-rose-600 focus:ring-rose-500"
+                />
+                <div>
+                  <span className="font-bold text-[13px] text-on-surface block">
+                    Trips & Dispatches Manifests ({tripsCount} records)
+                  </span>
+                  <p className="text-[11px] text-outline mt-0.5">
+                    Wipes active corridor dispatches, waybill dockets, and transit logs.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="pt-2 flex items-center justify-between border-t border-[#e5eeff]">
+              <span className="text-[11px] font-label-code text-outline">
+                Action requires Confirmation • Immediate effect across all modules
+              </span>
+              <div className="flex items-center gap-2">
+                {onRestoreDemoData && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRestoreDemoData();
+                      triggerToast('Sample demo data restored successfully!');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-surface-container-low border border-[#dce9ff] text-on-surface hover:bg-surface-container font-semibold text-[12px] transition-all flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">restore</span>
+                    Restore Demo Data
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  disabled={!purgeInvoices && !purgeTransactions && !purgeExpenses && !purgeTrips}
+                  onClick={() => setShowPurgeConfirm(true)}
+                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[12px] shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+                  Purge Selected Sample Data
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* CONFIRMATION MODAL */}
+          {showPurgeConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowPurgeConfirm(false)}></div>
+              <div className="relative w-full max-w-md bg-surface-container-lowest rounded-2xl shadow-2xl border border-rose-300 overflow-hidden z-10 animate-in zoom-in-95 duration-200">
+                <div className="p-4 bg-rose-50 border-b border-rose-200 flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-rose-600 text-[24px]">
+                    error
+                  </span>
+                  <div>
+                    <h3 className="font-headline-sm text-[15px] font-bold text-rose-900">
+                      Confirm Sample Data Purge
+                    </h3>
+                    <p className="text-[11px] text-rose-700">
+                      Reset selected modules to clean slate
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-5 space-y-3 text-[13px] text-on-surface">
+                  <p>
+                    Are you sure you want to purge the selected demo datasets?
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 text-[12px] text-outline">
+                    {purgeInvoices && <li>{invoicesCount} Invoices & Accounts Receivable</li>}
+                    {purgeTransactions && <li>{transactionsCount} Bank & M-Pesa Reconciliation Items</li>}
+                    {purgeExpenses && <li>{expensesCount} Expense Vouchers & Claims</li>}
+                    {purgeTrips && <li>{tripsCount} Waybill Dispatches</li>}
+                  </ul>
+                  <p className="text-[11px] text-slate-500 pt-1">
+                    You can easily restore the sample dataset at any time using the &quot;Restore Demo Data&quot; button.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-surface-container-low border-t border-[#e5eeff] flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowPurgeConfirm(false)}
+                    className="px-4 py-2 rounded-xl border border-[#dce9ff] text-on-surface hover:bg-surface-container text-[12px] font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onPurgeDemoData) {
+                        onPurgeDemoData({
+                          invoices: purgeInvoices,
+                          transactions: purgeTransactions,
+                          expenses: purgeExpenses,
+                          trips: purgeTrips,
+                          all: purgeInvoices && purgeTransactions && purgeExpenses && purgeTrips,
+                        });
+                      }
+                      setShowPurgeConfirm(false);
+                      triggerToast('Selected sample data purged! Clean ledger initialized.');
+                    }}
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-[12px] shadow-sm flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">check</span>
+                    Yes, Purge Data Now
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

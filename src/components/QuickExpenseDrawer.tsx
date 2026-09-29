@@ -20,6 +20,7 @@ export const QuickExpenseDrawer: React.FC<QuickExpenseDrawerProps> = ({
   const [refCode, setRefCode] = useState('');
   const [notes, setNotes] = useState('');
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [uploadedFileDataUrl, setUploadedFileDataUrl] = useState<string | null>(null);
 
   // Dynamic vehicle/driver bindings based on selected trip
   const tripBindings: Record<
@@ -77,6 +78,8 @@ export const QuickExpenseDrawer: React.FC<QuickExpenseDrawerProps> = ({
       telemetryNote: 'Odometer auto-verified against GPS gateway.',
       status: 'pending',
       receiptAttached: !!uploadedFile,
+      receiptFileName: uploadedFile || undefined,
+      receiptDataUrl: uploadedFileDataUrl || undefined,
     });
 
     // Reset
@@ -85,6 +88,7 @@ export const QuickExpenseDrawer: React.FC<QuickExpenseDrawerProps> = ({
     setRefCode('');
     setNotes('');
     setUploadedFile(null);
+    setUploadedFileDataUrl(null);
     onClose();
   };
 
@@ -280,8 +284,17 @@ export const QuickExpenseDrawer: React.FC<QuickExpenseDrawerProps> = ({
                   type="file"
                   accept="image/*,.pdf"
                   onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setUploadedFile(e.target.files[0].name);
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setUploadedFile(file.name);
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const res = ev.target?.result as string;
+                        if (res) {
+                          setUploadedFileDataUrl(res);
+                        }
+                      };
+                      reader.readAsDataURL(file);
                     }
                   }}
                   className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"

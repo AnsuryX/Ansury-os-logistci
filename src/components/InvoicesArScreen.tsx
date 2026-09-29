@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Invoice, InvoicePayment, Customer, Vehicle, NavigationPath } from '../types';
 import { INITIAL_INVOICES, INITIAL_AUDIT_LOGS } from '../data/mockInvoices';
-import { safeDivide, uniqueId } from '../utils/format';
+import { safeDivide, uniqueId, downloadCsv } from '../utils/format';
 import { useAuth } from '../lib/auth';
 
 interface InvoicesArScreenProps {
@@ -81,6 +81,46 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
     }
     const kes = usd * fxRate;
     return `KES ${kes.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  };
+
+  const handleExportArLedger = () => {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = [
+      'Invoice Number',
+      'Issue Date',
+      'Due Date',
+      'Customer Name',
+      'Waybill Number',
+      'Corridor Route',
+      'Truck Plate',
+      'Status',
+      'Currency',
+      'Total Amount',
+      'Total Amount (KES Equivalent)',
+      'Paid Amount',
+      'Remaining Balance',
+      'Payment Count',
+    ];
+
+    const rows = filteredInvoices.map((inv) => [
+      inv.invoiceNumber,
+      inv.issueDate,
+      inv.dueDate,
+      inv.customerName,
+      inv.waybillNumber,
+      inv.corridor,
+      inv.truckReg,
+      inv.status.toUpperCase(),
+      inv.currency,
+      inv.totalAmount.toFixed(2),
+      (inv.currency === 'USD' ? inv.totalAmount * fxRate : inv.totalAmount).toFixed(2),
+      inv.paidAmount.toFixed(2),
+      inv.remainingBalance.toFixed(2),
+      inv.paymentHistory ? inv.paymentHistory.length : 0,
+    ]);
+
+    downloadCsv(`Ansury_Invoices_AR_Ledger_${dateStr}.csv`, [headers, ...rows]);
+    triggerToast(`Exported ${filteredInvoices.length} invoices to Accounts Receivable CSV!`);
   };
 
   // Filtered invoices
@@ -323,14 +363,24 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
               <span>Driver (Read-Only)</span>
             </div>
           ) : (
-            <button
-              disabled={!permissions.canManageInvoices}
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-3.5 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-body-sm text-[12px] font-medium shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="material-symbols-outlined text-[16px]">add_circle</span>
-              Issue Freight Invoice
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportArLedger}
+                className="px-3 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] hover:bg-surface-container text-on-surface font-body-sm text-[12px] font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+                title="Download Accounts Receivable Ledger CSV"
+              >
+                <span className="material-symbols-outlined text-[16px]">file_download</span>
+                Export AR Ledger (.csv)
+              </button>
+              <button
+                disabled={!permissions.canManageInvoices}
+                onClick={() => setIsCreateModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-body-sm text-[12px] font-medium shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                Issue Freight Invoice
+              </button>
+            </div>
           )}
         </div>
       </div>

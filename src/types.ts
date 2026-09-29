@@ -78,10 +78,10 @@ export interface RealBankTransaction {
   description: string;
   reference: string;
   exchangeRateKes: number;
-  category: 'Freight Revenue' | 'Cash Operations / Drawings' | 'Cheque Clearance' | 'Bank Charges' | 'Capital Injection' | 'Related Party';
+  category: 'Freight Revenue' | 'Cash Operations / Drawings' | 'Cheque Clearance' | 'Bank Charges' | 'Capital Injection' | 'Related Party' | string;
   checkNumber?: string;
   creationTime: string;
-  sourceDoc: 'I&M Bank Statement' | 'SWIFT Wire';
+  sourceDoc: 'I&M Bank Statement' | 'SWIFT Wire' | string;
 }
 
 export interface SwiftMessage {
@@ -173,6 +173,8 @@ export interface ExpenseClaim {
   missingReceipt?: boolean;
   status: 'pending' | 'approved' | 'rejected' | 'held';
   receiptAttached?: boolean;
+  receiptFileName?: string;
+  receiptDataUrl?: string;
   deletedAt?: string;
   deletedReason?: string;
   actorId?: string;
@@ -251,6 +253,7 @@ export interface AppUser {
 export type AuditActionType =
   | 'CREATE'
   | 'UPDATE'
+  | 'DELETE'
   | 'DELETE_SOFT'
   | 'RECONCILE'
   | 'APPROVE'
@@ -285,6 +288,7 @@ export type AuditEntityType =
   | 'RECONCILIATION_TXN'
   | 'VEHICLE'
   | 'CUSTOMER'
+  | 'TRIP'
   | 'USER'
   | 'FLOAT_ALLOCATION'
   | 'SYSTEM_RULE'
@@ -341,4 +345,30 @@ export interface AnomalyIncident {
   impact: string;
   actionText: string;
   isResolved?: boolean;
+}
+
+export interface TripDispatch {
+  id: string;
+  waybillNumber: string;
+  route: string;
+  corridor: string;
+  origin: string;
+  destination: string;
+  shipper: string;
+  cargo: string;
+  cargoType: 'Liquid Bulk / Fuel' | 'Containerized' | 'Dry Bulk' | 'General Freight';
+  truckReg: string;
+  truckModel: string;
+  driverName: string;
+  driverPhone?: string;
+  status: 'In Transit' | 'Customs Hold' | 'Loading / Shunting' | 'Discharging' | 'Completed' | 'Delayed';
+  statusColor: string;
+  progressPct: number;
+  eta: string;
+  grossValueKes: number;
+  grossValueUsd: number;
+  fuelAdvanceKes?: number;
+  driverAllowanceKes?: number;
+  startDate: string;
+  notes?: string;
 }

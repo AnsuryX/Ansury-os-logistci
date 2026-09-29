@@ -5,6 +5,8 @@ import {
   REAL_BANK_TRANSACTIONS,
   REAL_SWIFT_MESSAGES,
 } from '../data/realBeyayanData';
+import { downloadCsv } from '../utils/format';
+import { parseFinancialDocument } from '../utils/documentParser';
 
 export const FinancialStatementsScreen: React.FC = () => {
   const [currencyMode, setCurrencyMode] = useState<'USD' | 'KES'>('USD');
@@ -85,33 +87,96 @@ export const FinancialStatementsScreen: React.FC = () => {
     return matchesSearch && matchesCat;
   });
 
-  // Mock file uploader handler
+  // Real file uploader & financial parser
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    triggerToast(`Document "${file.name}" ingested! Parsing financial data...`);
+    triggerToast(`Ingesting "${file.name}"... Parsing transactions & statement lines...`);
 
-    // Simulated ingestion of an additional invoice/remittance
-    setTimeout(() => {
-      const newTx: RealBankTransaction = {
-        id: `tx-${Date.now()}`,
-        accountNumber: '01306297851250',
-        accountName: 'BEYAYAN LIMITED',
-        bookDate: new Date().toISOString().split('T')[0],
-        amountUsd: 12450.0,
-        indicator: 'Credit',
-        counterparty: 'ONE PETROLEUM (U) LIMITED',
-        description: `INWARD REMITTANCE /ROC/INV-2026-08 HFO TRANSPORT COSTS BEYAYAN LIMITED (${file.name})`,
-        reference: `SWIFT-${Math.floor(100000 + Math.random() * 900000)}`,
-        exchangeRateKes: 127.2,
-        category: 'Freight Revenue',
-        creationTime: new Date().toISOString(),
-        sourceDoc: 'SWIFT Wire',
-      };
-      setTransactions((prev) => [newTx, ...prev]);
-      triggerToast(`Parsed successfully! Added $12,450.00 Freight Revenue from ${file.name}. Statements updated!`);
-    }, 1200);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawContent = event.target?.result as string;
+      if (!rawContent) {
+        triggerToast(`Error: Could not read content of "${file.name}".`);
+        return;
+      }
+
+      const result = parseFinancialDocument(file.name, rawContent, fxRate);
+      if (result.success && result.transactions.length > 0) {
+        setTransactions((prev) => [...result.transactions, ...prev]);
+        triggerToast(result.summaryMessage);
+      } else {
+        triggerToast(result.summaryMessage);
+      }
+    };
+
+    reader.onerror = () => {
+      triggerToast(`Failed to read file "${file.name}".`);
+    };
+
+    reader.readAsText(file);
+    // Reset file input target value so user can upload the same file again if modified
+    e.target.value = '';
+  };
+
+  // Real Statutory Financial Statements & Auditor Schedule Exporter
+  const handleExportStatements = () => {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const operatingMarginPct = freightRevenue > 0 ? (netIncome / freightRevenue) * 100 : 0;
+    const rows: (string | number)[][] = [
+      ['ANSURY LOGISTICS OS — STATUTORY FINANCIAL STATEMENTS & AUDITOR SCHEDULE'],
+      ['Reporting Entity', BEYAYAN_COMPANY_PROFILE.legalName],
+      ['Registration City', BEYAYAN_COMPANY_PROFILE.registrationCity],
+      ['Primary Treasury Account', `${BEYAYAN_COMPANY_PROFILE.bankName} - ${BEYAYAN_COMPANY_PROFILE.accountNumberBBAN}`],
+      ['Export Date (UTC)', dateStr],
+      ['Reporting Currency', currencyMode],
+      ['Conversion Peg', `1 USD = ${fxRate.toFixed(2)} KES`],
+      [],
+      ['========================================================================================'],
+      ['SECTION 1: STATEMENT OF PROFIT OR LOSS (INCOME STATEMENT)'],
+      ['========================================================================================'],
+      ['Financial Line Item', 'Amount (USD)', 'Amount (KES)', 'Financial Rule & Accounting Treatment'],
+      ['Gross Freight Haulage Revenue (Accrued)', freightRevenue.toFixed(2), (freightRevenue * fxRate).toFixed(2), 'Accrued corridor billings + Inward SWIFT Pacs.008 wire settlements'],
+      ['Direct Corridor Haulage Costs', (-grossOperatingCost).toFixed(2), (-grossOperatingCost * fxRate).toFixed(2), 'Direct voyage costs: Fuel vouchers, Malaba/Busia border tolls, weighbridge cess'],
+      ['GROSS OPERATING SURPLUS', grossProfit.toFixed(2), (grossProfit * fxRate).toFixed(2), 'Direct corridor haulage contribution margin'],
+      ['Administrative OpEx & Yard Overheads', (-operatingExpenses).toFixed(2), (-operatingExpenses * fxRate).toFixed(2), 'Head office operations, yard maintenance, CANBUS telematics licenses'],
+      ['NET OPERATING SURPLUS', netIncome.toFixed(2), (netIncome * fxRate).toFixed(2), 'Earnings before tax and shareholder drawings'],
+      ['Operating Surplus Margin', `${operatingMarginPct.toFixed(2)}%`, `${operatingMarginPct.toFixed(2)}%`, 'Surplus divided by Gross Freight Revenue'],
+      [],
+      ['========================================================================================'],
+      ['SECTION 2: STATEMENT OF FINANCIAL POSITION (BALANCE SHEET)'],
+      ['========================================================================================'],
+      ['Asset / Liability Category', 'Amount (USD)', 'Amount (KES)', 'Sub-Ledger Code'],
+      ['Liquid Cash at Bank (I&M USD Treasury)', netClosingCashBalance.toFixed(2), (netClosingCashBalance * fxRate).toFixed(2), 'Current Asset — Account 1000'],
+      ['M-Pesa Operating Float & Fuel Cards', '18500.00', (18500 * fxRate).toFixed(2), 'Current Asset — Account 1050'],
+      ['Trade Accounts Receivable (Outstanding)', '34200.00', (34200 * fxRate).toFixed(2), 'Current Asset — Account 1100'],
+      ['Fleet Prime Movers & Fuel Tankers (NBV)', '240000.00', (240000 * fxRate).toFixed(2), 'Non-Current Asset — Account 1500 (CapEx)'],
+      ['TOTAL ASSET BASE', (netClosingCashBalance + 18500 + 34200 + 240000).toFixed(2), ((netClosingCashBalance + 18500 + 34200 + 240000) * fxRate).toFixed(2), 'Total Corporate Assets'],
+      ['Trade Payables & Border Cess Accruals', '28400.00', (28400 * fxRate).toFixed(2), 'Current Liability — Account 2000'],
+      ['Shareholder Equity / Capital Injections', capitalInjection > 0 ? capitalInjection.toFixed(2) : '10000.00', ((capitalInjection > 0 ? capitalInjection : 10000) * fxRate).toFixed(2), 'Equity — Account 3001 (Not Revenue)'],
+      ['Retained Operating Surplus', netIncome.toFixed(2), (netIncome * fxRate).toFixed(2), 'Retained Earnings — Account 3100'],
+      [],
+      ['========================================================================================'],
+      ['SECTION 3: REAL VERIFIED BANK TRANSACTIONS LEDGER'],
+      ['========================================================================================'],
+      ['Txn ID', 'Book Date', 'Type', 'Amount (USD)', 'Amount (KES)', 'Counterparty', 'Description / Narration', 'Reference Code', 'Category', 'Source Document'],
+      ...transactions.map((t) => [
+        t.id,
+        t.bookDate,
+        t.indicator,
+        t.amountUsd.toFixed(2),
+        (t.amountUsd * (t.exchangeRateKes || fxRate)).toFixed(2),
+        t.counterparty,
+        t.description,
+        t.reference,
+        t.category,
+        t.sourceDoc || 'Bank Statement',
+      ]),
+    ];
+
+    downloadCsv(`Ansury_Financial_Statements_${dateStr}.csv`, rows);
+    triggerToast('Statutory Financial Statements & Auditor Schedule downloaded as CSV!');
   };
 
   return (
@@ -178,11 +243,12 @@ export const FinancialStatementsScreen: React.FC = () => {
           </div>
 
           <button
-            onClick={() => triggerToast('Exporting Statutory Financial Statements & Auditor Schedule (PDF)...')}
+            onClick={handleExportStatements}
             className="px-3.5 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] hover:bg-surface-container text-on-surface font-body-sm text-[12px] font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+            title="Download Statutory P&L, Balance Sheet, and Auditor Ledger CSV"
           >
             <span className="material-symbols-outlined text-[16px]">picture_as_pdf</span>
-            Export Statements
+            Export Statements (.csv)
           </button>
 
           <label className="px-3.5 py-2 rounded-xl bg-primary text-on-primary hover:bg-primary-container font-body-sm text-[12px] font-medium shadow-sm transition-all flex items-center gap-1.5 cursor-pointer">

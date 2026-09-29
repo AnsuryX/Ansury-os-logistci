@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { MOCK_TRIP_DEEP_DIVE } from '../data/mockData';
+import { downloadCsv } from '../utils/format';
 
 export const ProfitabilityScreen: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<'trips' | 'vehicles' | 'routes'>('trips');
@@ -8,6 +9,44 @@ export const ProfitabilityScreen: React.FC = () => {
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleExportPnLLedger = () => {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = [
+      'Registration',
+      'Make / Model',
+      'Assigned Driver',
+      'Completed Trips',
+      'Distance (km)',
+      'Gross Revenue (KES)',
+      'Fuel Expense (KES)',
+      'Tolls & Border Cess (KES)',
+      'Maintenance & Repairs (KES)',
+      'Gross Profit (KES)',
+      'Margin %',
+      'Cost per km (KES)',
+      'Performance Status',
+    ];
+
+    const rows = vehicleLedger.map((v) => [
+      v.reg,
+      v.model,
+      v.driver,
+      v.trips,
+      v.distanceKm,
+      v.revenueKes,
+      v.fuelKes,
+      v.tollsKes,
+      v.maintKes,
+      v.grossProfitKes,
+      `${v.marginPct}%`,
+      v.costPerKm,
+      v.status,
+    ]);
+
+    downloadCsv(`Ansury_Corridor_Vehicle_Profitability_Ledger_${dateStr}.csv`, [headers, ...rows]);
+    triggerToast(`Exported ${vehicleLedger.length} vehicle profitability records to CSV!`);
   };
 
   const trip = MOCK_TRIP_DEEP_DIVE;
@@ -127,11 +166,12 @@ export const ProfitabilityScreen: React.FC = () => {
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => triggerToast('Generating Comprehensive Corridor P&L Ledger (Excel)...')}
+            onClick={handleExportPnLLedger}
             className="px-3.5 py-1.5 rounded-xl bg-surface-container-lowest border border-[#dce9ff] hover:bg-surface-container text-on-surface font-body-sm text-[12px] font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+            title="Download Vehicle & Corridor P&L Ledger CSV"
           >
             <span className="material-symbols-outlined text-[16px]">file_download</span>
-            Export P&L Ledger
+            Export P&L Ledger (.csv)
           </button>
         </div>
       </div>

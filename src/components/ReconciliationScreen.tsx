@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ReconcileTransaction } from '../types';
 import { useAuth } from '../lib/auth';
+import { downloadCsv } from '../utils/format';
 
 interface ReconciliationScreenProps {
   transactions: ReconcileTransaction[];
@@ -60,6 +61,42 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
     triggerToast(`Transaction ${rejectingTxn.ref} soft-deleted with audit tombstone.`);
     setRejectingTxn(null);
     setRejectionRationale('');
+  };
+
+  const handleExportReconciliationLedger = () => {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const headers = [
+      'Txn ID',
+      'Channel / Raw Type',
+      'External Ref',
+      'Timestamp (EAT)',
+      'Merchant / Payee',
+      'Target Account / Asset Plate',
+      'Amount (KES)',
+      'Match Confidence %',
+      'Confidence Label',
+      'Ansury ERP Suggested Record',
+      'ERP Subtitle',
+      'Reconciliation Status',
+    ];
+
+    const rows = filteredTxns.map((t) => [
+      t.id,
+      t.rawType,
+      t.ref,
+      t.timestamp,
+      t.merchantOrParty,
+      t.accountOrTarget,
+      t.amountKes,
+      `${t.confidencePct}%`,
+      t.confidenceLabel,
+      t.erpTitle,
+      t.erpSubtitle,
+      t.status.toUpperCase(),
+    ]);
+
+    downloadCsv(`Ansury_Bank_Mpesa_Reconciliation_Ledger_${dateStr}.csv`, [headers, ...rows]);
+    triggerToast(`Exported ${filteredTxns.length} reconciliation transactions to CSV!`);
   };
 
   return (
@@ -297,9 +334,9 @@ export const ReconciliationScreen: React.FC<ReconciliationScreenProps> = ({
             <option>Equity B2C Float</option>
           </select>
           <button
-            onClick={() => triggerToast('Exporting Audit Trail to Excel...')}
+            onClick={handleExportReconciliationLedger}
             className="p-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-outline hover:text-on-surface transition-colors border border-[#dce9ff]"
-            title="Export CSV"
+            title="Export Reconciliation Ledger (.csv)"
           >
             <span className="material-symbols-outlined text-[18px]">download</span>
           </button>

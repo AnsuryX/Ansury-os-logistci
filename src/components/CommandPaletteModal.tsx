@@ -48,6 +48,26 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       },
     },
     {
+      title: 'Trips & Dispatches Manifests',
+      subtitle: 'Manage corridor waybills, customs OSBP holds & driver dockets',
+      category: 'Operations',
+      icon: 'alt_route',
+      action: () => {
+        onNavigate('trips');
+        onClose();
+      },
+    },
+    {
+      title: 'Purge Demo Data / Reset to Clean Slate',
+      subtitle: 'Wipe sample invoices, bank txns, vouchers & dispatches',
+      category: 'System Administration',
+      icon: 'delete_sweep',
+      action: () => {
+        onNavigate('settings');
+        onClose();
+      },
+    },
+    {
       title: 'Invoices & Accounts Receivable (AR)',
       subtitle: 'Manage freight invoices, partial payments, credit terms & aging',
       category: 'Finance',

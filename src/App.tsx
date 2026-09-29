@@ -11,12 +11,16 @@ import {
   InvoicePayment,
   AuditLogEntry,
   AppUser,
+  SystemSettings,
+  AnomalyIncident,
+  TripDispatch,
 } from './types';
 import {
   INITIAL_VEHICLES,
   INITIAL_RECONCILIATION_TXNS,
   INITIAL_EXPENSES,
 } from './data/mockData';
+import { INITIAL_TRIPS } from './data/mockTrips';
 import {
   INITIAL_CUSTOMERS,
   INITIAL_COMPANY_PROFILE,
@@ -57,6 +61,7 @@ import {
   fetchInvoicesFromSupabase,
   fetchAuditLogsFromSupabase,
   fetchAppUsersFromSupabase,
+  fetchSystemSettingsFromSupabase,
   upsertVehicleToSupabase,
   upsertCustomerToSupabase,
   upsertCompanyProfileToSupabase,
@@ -67,6 +72,8 @@ import {
   upsertAppUserToSupabase,
   softDeleteExpenseInSupabase,
   softDeleteReconcileTxnInSupabase,
+  upsertReconciliationTxnsToSupabase,
+  saveSystemSettingsToSupabase,
 } from './lib/supabase';
 
 function AppShell() {
@@ -84,9 +91,49 @@ function AppShell() {
   );
   const [expenses, setExpenses] = useState<ExpenseClaim[]>(INITIAL_EXPENSES);
   const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
+  const [trips, setTrips] = useState<TripDispatch[]>(INITIAL_TRIPS);
+  const [isNewTripModalRequested, setIsNewTripModalRequested] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
   const [appUsers, setAppUsers] = useState<AppUser[]>(Object.values(DEMO_USERS));
-  const [anomaliesCount, setAnomaliesCount] = useState(3);
+  const [anomalies, setAnomalies] = useState<AnomalyIncident[]>([
+    {
+      id: 'anom-1',
+      title: 'KDA 542T • Telemetry Fuel Spike (+14.2%)',
+      location: 'Naivasha Escarpment → Eldoret Bypass',
+      severity: 'CRITICAL',
+      severityColor: 'bg-error-container text-on-error-container',
+      timestamp: '2 hours ago',
+      details:
+        'CANBUS fuel flow meter registered 54.2 L/100km on the climb toward Mai Mahiu (+14.2% variance). Sensor logs show 3 extended idle stops.',
+      impact: 'Estimated fuel excess cost: KES 8,400',
+      actionText: 'Dispatch Driver Telemetry Debrief',
+    },
+    {
+      id: 'anom-2',
+      title: 'Shell Eldoret POS • Duplicate Transaction Detected',
+      location: 'Paybill 247247 • Receipt QK829J25NB',
+      severity: 'HIGH AUDIT',
+      severityColor: 'bg-amber-100 text-amber-900',
+      timestamp: 'Today 14:15 EAT',
+      details:
+        'Two identical charge requests of KES 18,500 were processed within a 300-second window.',
+      impact: 'Risk exposure: KES 18,500 duplicate debit',
+      actionText: 'Initiate Safaricom M-Pesa Reversal Request',
+    },
+    {
+      id: 'anom-3',
+      title: 'KCJ 312L • Missing Fiscal ETR Tax Receipt',
+      location: 'Equator Tyres & Alignment - Nakuru Section 58',
+      severity: 'KRA COMPLIANCE',
+      severityColor: 'bg-purple-100 text-purple-900',
+      timestamp: '3 hours ago',
+      details:
+        'A cash float expense of KES 48,000 was submitted without an attached KRA TIMS fiscalized receipt.',
+      impact: 'Risk: Disallowance under KRA Section 23',
+      actionText: 'Demand Merchant ETR Receipt',
+    },
+  ]);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [securityToast, setSecurityToast] = useState<string | null>(null);
 
   // Modals & Drawers state
@@ -119,6 +166,7 @@ function AppShell() {
           cloudInvoices,
           cloudAuditLogs,
           cloudAppUsers,
+          cloudSettings,
         ] = await Promise.all([
           fetchVehiclesFromSupabase(),
           fetchCustomersFromSupabase(),
@@ -127,6 +175,7 @@ function AppShell() {
           fetchInvoicesFromSupabase(),
           fetchAuditLogsFromSupabase(),
           fetchAppUsersFromSupabase(),
+          fetchSystemSettingsFromSupabase(),
         ]);
 
         if (cloudVehicles && cloudVehicles.length > 0) setVehicles(cloudVehicles);
@@ -136,6 +185,7 @@ function AppShell() {
         if (cloudInvoices && cloudInvoices.length > 0) setInvoices(cloudInvoices);
         if (cloudAuditLogs && cloudAuditLogs.length > 0) setAuditLogs(cloudAuditLogs);
         if (cloudAppUsers && cloudAppUsers.length > 0) setAppUsers(cloudAppUsers);
+        if (cloudSettings) setSystemSettings(cloudSettings);
       } catch (err) {
         console.warn('Supabase auto-hydration using local fallback:', err);
       }
@@ -464,6 +514,82 @@ function AppShell() {
     });
   };
 
+  // Trips & Dispatches Handlers
+  const handleCreateTrip = (newTrip: TripDispatch) => {
+    setTrips((prev) => [newTrip, ...prev]);
+    setIsNewTripModalRequested(false);
+    handleLogAudit({
+      action: 'CREATE',
+      entityType: 'TRIP',
+      entityId: newTrip.id,
+      newValue: `${newTrip.waybillNumber} - ${newTrip.route} (${newTrip.truckReg})`,
+      reason: `Corridor waybill dispatch manifest issued for shipper ${newTrip.shipper}`,
+    });
+  };
+
+  const handleUpdateTripStatus = (tripId: string, status: TripDispatch['status']) => {
+    setTrips((prev) =>
+      prev.map((t) => (t.id === tripId ? { ...t, status } : t))
+    );
+    handleLogAudit({
+      action: 'UPDATE',
+      entityType: 'TRIP',
+      entityId: tripId,
+      newValue: status,
+      reason: `Corridor waybill status updated to ${status}`,
+    });
+  };
+
+  // Demo Data Management & Ledger Reset
+  const handlePurgeDemoData = (options: {
+    invoices: boolean;
+    transactions: boolean;
+    expenses: boolean;
+    trips: boolean;
+    all: boolean;
+  }) => {
+    if (options.all || options.invoices) {
+      setInvoices([]);
+    }
+    if (options.all || options.transactions) {
+      setReconcileTxns([]);
+    }
+    if (options.all || options.expenses) {
+      setExpenses([]);
+    }
+    if (options.all || options.trips) {
+      setTrips([]);
+    }
+    if (options.all) {
+      setAnomalies([]);
+    }
+
+    handleLogAudit({
+      action: 'DELETE',
+      entityType: 'RECONCILIATION_TXN',
+      entityId: 'ALL_SAMPLE_DATA',
+      newValue: 'PURGED_DEMO_RECORDS',
+      reason: 'Purged demonstration data to initialize clean enterprise production slate.',
+    });
+  };
+
+  const handleRestoreDemoData = () => {
+    setInvoices(INITIAL_INVOICES);
+    setReconcileTxns(INITIAL_RECONCILIATION_TXNS);
+    setExpenses(INITIAL_EXPENSES);
+    setTrips(INITIAL_TRIPS);
+    setVehicles(INITIAL_VEHICLES);
+    setCustomers(INITIAL_CUSTOMERS);
+
+    handleLogAudit({
+      action: 'CREATE',
+      entityType: 'RECONCILIATION_TXN',
+      entityId: 'RESTORE_SAMPLE_DATA',
+      newValue: 'RESTORED_DEMO_DATA',
+      reason: 'Restored realistic demonstration fleet and financial dataset.',
+    });
+  };
+
   // User Management Handlers (Admin Only)
   const handleAddUser = (newUser: AppUser) => {
     setAppUsers((prev) => [newUser, ...prev]);
@@ -512,8 +638,28 @@ function AppShell() {
     });
   };
 
-  const handleResolveAnomaly = () => {
-    setAnomaliesCount((prev) => Math.max(0, prev - 1));
+  const handleResolveAnomaly = (id: string, title?: string) => {
+    setAnomalies((prev) => prev.filter((a) => a.id !== id));
+    handleLogAudit({
+      action: 'SETTINGS_UPDATE',
+      entityType: 'SYSTEM_RULE',
+      entityId: id,
+      newValue: 'resolved',
+      reason: `Anomaly investigated & resolved: ${title || id}`,
+    });
+  };
+
+  const handleImportTransactions = async (newTxns: ReconcileTransaction[], filename: string) => {
+    if (!newTxns || newTxns.length === 0) return;
+    setReconcileTxns((prev) => [...newTxns, ...prev]);
+    await upsertReconciliationTxnsToSupabase(newTxns);
+    handleLogAudit({
+      action: 'CREATE',
+      entityType: 'RECONCILIATION_TXN',
+      entityId: `csv_import_${Date.now()}`,
+      newValue: `${newTxns.length} transactions`,
+      reason: `Imported and persisted statement feed from ${filename}`,
+    });
   };
 
   if (isLoading) {
@@ -547,7 +693,9 @@ function AppShell() {
       <Sidebar
         currentPath={currentPath}
         onNavigate={(path) => setCurrentPath(path)}
-        pendingAnomaliesCount={anomaliesCount}
+        pendingAnomaliesCount={anomalies.length}
+        activeVehiclesCount={vehicles.filter((v) => v.status === 'Active').length}
+        totalVehiclesCount={vehicles.length}
       />
 
       {/* Main Content Area (Offset by Sidebar width 64 = 16rem = 256px) */}
@@ -556,7 +704,7 @@ function AppShell() {
         <Header
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           onNavigateSettings={() => setCurrentPath('settings')}
-          notificationCount={anomaliesCount}
+          notificationCount={anomalies.length}
           companyName={companyProfile.legalName}
           accountNumber={companyProfile.accountNumber}
           userName={user?.fullName || userProfile.fullName}
@@ -567,7 +715,12 @@ function AppShell() {
           {currentPath === 'overview' && (
             <DashboardScreen
               vehicles={vehicles}
-              onNavigate={(path) => setCurrentPath(path)}
+              onNavigate={(path) => {
+                if (path === 'trips') {
+                  setIsNewTripModalRequested(true);
+                }
+                setCurrentPath(path);
+              }}
               onOpenQuickExpense={() => setIsQuickExpenseOpen(true)}
               userName={user?.fullName || userProfile.fullName}
               companyName={companyProfile.legalName}
@@ -598,7 +751,16 @@ function AppShell() {
 
           {currentPath === 'profitability' && <ProfitabilityScreen />}
 
-          {currentPath === 'trips' && <TripsScreen />}
+          {currentPath === 'trips' && (
+            <TripsScreen
+              trips={trips}
+              vehicles={vehicles}
+              customers={customers}
+              onAddTrip={handleCreateTrip}
+              onUpdateTripStatus={handleUpdateTripStatus}
+              initialOpenCreateModal={isNewTripModalRequested}
+            />
+          )}
 
           {currentPath === 'vehicles-fleet' && (
             <FleetScreen
@@ -640,6 +802,14 @@ function AppShell() {
               onUpdateUserProfile={handleUpdateUser}
               vehicles={vehicles}
               customers={customers}
+              systemSettings={systemSettings || undefined}
+              onUpdateSystemSettings={(st) => setSystemSettings(st)}
+              invoicesCount={invoices.length}
+              transactionsCount={reconcileTxns.length}
+              expensesCount={expenses.length}
+              tripsCount={trips.length}
+              onPurgeDemoData={handlePurgeDemoData}
+              onRestoreDemoData={handleRestoreDemoData}
             />
           )}
 
@@ -687,7 +857,10 @@ function AppShell() {
           )}
 
           {currentPath === 'anomalies-engine' && (
-            <AnomaliesScreen onResolveAnomaly={handleResolveAnomaly} />
+            <AnomaliesScreen
+              anomalies={anomalies}
+              onResolveAnomaly={handleResolveAnomaly}
+            />
           )}
 
           {currentPath === 'ansury-ai-cfo' && <AICfoScreen />}
@@ -725,9 +898,7 @@ function AppShell() {
       <ImportCsvModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onImportComplete={(_count) => {
-          handleBatchAutoMatch();
-        }}
+        onImportTransactions={handleImportTransactions}
       />
     </div>
   );
