@@ -9,6 +9,7 @@ interface TripsScreenProps {
   customers: Customer[];
   onAddTrip: (trip: TripDispatch) => void;
   onUpdateTripStatus: (tripId: string, status: TripDispatch['status']) => void;
+  onDeleteTrip?: (tripId: string, reason: string) => void;
   initialOpenCreateModal?: boolean;
 }
 
@@ -18,6 +19,7 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
   customers,
   onAddTrip,
   onUpdateTripStatus,
+  onDeleteTrip,
   initialOpenCreateModal = false,
 }) => {
   const { role, permissions } = useAuth();
@@ -26,6 +28,8 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
   const [cargoFilter, setCargoFilter] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(initialOpenCreateModal);
   const [selectedDocketTrip, setSelectedDocketTrip] = useState<TripDispatch | null>(null);
+  const [tripToDelete, setTripToDelete] = useState<TripDispatch | null>(null);
+  const [tripDeleteReason, setTripDeleteReason] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Form State for New Dispatch
@@ -465,16 +469,31 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
 
             {/* Footer Actions */}
             <div className="pt-2 border-t border-[#eff4ff] flex items-center justify-between text-[11px]">
-              <span className="text-outline truncate max-w-[240px]">
+              <span className="text-outline truncate max-w-[200px]">
                 {trip.notes || `Dispatched ${trip.startDate}`}
               </span>
-              <button
-                onClick={() => setSelectedDocketTrip(trip)}
-                className="px-2.5 py-1 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-white font-label-code text-[11px] font-bold transition-all flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[14px]">description</span>
-                View Waybill Docket
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setSelectedDocketTrip(trip)}
+                  className="px-2.5 py-1 rounded-lg bg-surface-container text-primary hover:bg-primary hover:text-white font-label-code text-[11px] font-bold transition-all flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[14px]">description</span>
+                  View Waybill Docket
+                </button>
+                {(role === 'super_admin' || permissions.canDeleteRecords) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTripToDelete(trip);
+                      setTripDeleteReason('');
+                    }}
+                    className="p-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
+                    title="Cancel & Delete Dispatch Manifest (Admin Only)"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">delete</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -839,9 +858,26 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
 
             {/* Modal Footer */}
             <div className="p-space-md bg-surface-container-low flex items-center justify-between border-t border-[#e5eeff]">
-              <span className="text-[11px] font-label-code text-outline">
-                Signed electronically by Carrier & Consignor Dispatcher
-              </span>
+              <div className="flex items-center gap-2">
+                {(role === 'super_admin' || permissions.canDeleteRecords) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = selectedDocketTrip;
+                      setSelectedDocketTrip(null);
+                      setTripToDelete(target);
+                      setTripDeleteReason('');
+                    }}
+                    className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl font-body-sm text-[12px] font-semibold flex items-center gap-1 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">delete</span>
+                    Cancel & Remove Waybill
+                  </button>
+                )}
+                <span className="text-[11px] font-label-code text-outline hidden sm:inline">
+                  Signed electronically by Carrier & Consignor Dispatcher
+                </span>
+              </div>
               <button
                 onClick={() => {
                   window.print();
@@ -852,6 +888,107 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
                 Print Transit Waybill
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audited Trip / Waybill Removal Modal */}
+      {tripToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-md border border-rose-200 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">cancel</span>
+                </span>
+                <div>
+                  <h3 className="font-headline-sm text-base font-bold text-rose-900">
+                    Cancel & Remove Dispatch Manifest
+                  </h3>
+                  <span className="font-label-code text-[11px] text-outline">
+                    Admin Governance • Northern Corridor Waybill Cancellation
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setTripToDelete(null)}
+                className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-surface-container-low rounded-xl text-[12px] space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="font-mono font-bold text-primary text-[13px]">{tripToDelete.waybillNumber}</span>
+                <span className="font-label-code text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-200 text-slate-800">
+                  {tripToDelete.status}
+                </span>
+              </div>
+              <div className="text-on-surface font-medium">{tripToDelete.route} ({tripToDelete.corridor})</div>
+              <div className="text-outline">Shipper: <strong className="text-on-surface">{tripToDelete.shipper}</strong> • Truck: {tripToDelete.truckReg}</div>
+              <div className="flex justify-between pt-1 border-t border-slate-200 text-[11px]">
+                <span>Contract Value:</span>
+                <span className="font-mono font-bold text-on-surface">KES {tripToDelete.grossValueKes.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {tripToDelete.status === 'In Transit' && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-[11px] text-rose-900 flex items-start gap-2">
+                <span className="material-symbols-outlined text-rose-600 text-[18px] shrink-0 mt-0.5">warning</span>
+                <div>
+                  <strong>Active Rolling Transit Notice:</strong> This waybill is recorded as actively rolling in transit. Removing this manifest will cancel driver route clearance and write an immutable audit log.
+                </div>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!tripDeleteReason.trim()) {
+                  triggerToast('Error: Mandatory audit rationale is required to cancel this dispatch manifest.');
+                  return;
+                }
+                if (onDeleteTrip) {
+                  onDeleteTrip(tripToDelete.id, tripDeleteReason);
+                }
+                triggerToast(`Waybill manifest ${tripToDelete.waybillNumber} cancelled & removed from active roster.`);
+                setTripToDelete(null);
+                setTripDeleteReason('');
+              }}
+              className="space-y-3 text-[12px]"
+            >
+              <div>
+                <label className="block font-label-sm text-[11px] font-semibold text-outline uppercase mb-1">
+                  Mandatory Cancellation Rationale *
+                </label>
+                <textarea
+                  rows={3}
+                  value={tripDeleteReason}
+                  onChange={(e) => setTripDeleteReason(e.target.value)}
+                  placeholder="Specify reason for cancelling manifest (e.g. Shipper cancelled order, customs clearance revoked, duplicate waybill entry)..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface focus:outline-none focus:border-rose-600"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setTripToDelete(null)}
+                  className="px-4 py-2 bg-surface-container-low text-on-surface rounded-xl font-body-sm text-[12px] font-medium hover:bg-surface-container transition-colors"
+                >
+                  Keep Manifest
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-rose-600 text-white rounded-xl font-body-sm text-[12px] font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[16px]">cancel</span>
+                  Confirm Cancellation & Audit
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

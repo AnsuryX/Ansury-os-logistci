@@ -214,6 +214,23 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
                     <li>Click <strong>Issue Credential &amp; Log Audit</strong>. The credential is armed and audited.</li>
                   </ol>
                 </div>
+
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <h4 className="font-bold text-rose-900 text-sm flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[18px] text-rose-600">gavel</span>
+                    Audited Deletion &amp; Removal Procedures (Super Admin Only)
+                  </h4>
+                  <p className="text-slate-600 text-xs">
+                    In compliance with GAAP and KRA audit standards, deletions require explicit administrator rationale and write immutable tombstones:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-slate-600 text-[11px]">
+                    <li><strong>Customers &amp; Shippers:</strong> In Customers, click the trash icon. If the shipper has open AR or active shipments, typing DELETE is mandatory.</li>
+                    <li><strong>Fleet Assets (Vehicles):</strong> In Fleet, click Decommission. In-transit vehicles require confirmation to ensure route logs remain continuous.</li>
+                    <li><strong>Drivers &amp; Operators:</strong> In User Management or Drivers tab, click Remove. Unassigns from vehicle; active admin self-deletion is strictly blocked.</li>
+                    <li><strong>Expenses &amp; Invoices:</strong> In Expenses or Invoices, click Void to record audited reversal tombstones without silently wiping ledgers.</li>
+                    <li><strong>Trips &amp; Waybills:</strong> In Trips, cancel manifests with mandatory shipper/customs reason.</li>
+                  </ul>
+                </div>
               </div>
             )}
 

@@ -190,6 +190,19 @@ export async function upsertVehicleToSupabase(vehicle: Vehicle): Promise<boolean
   }
 }
 
+export async function deleteVehicleFromSupabase(regOrId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('vehicles')
+      .delete()
+      .or(`reg.eq.${regOrId},id.eq.${regOrId}`);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // ==========================================
 // CUSTOMERS REPOSITORY
 // ==========================================
@@ -253,6 +266,19 @@ export async function upsertCustomerToSupabase(customer: Customer): Promise<bool
       },
       { onConflict: 'name' }
     );
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteCustomerFromSupabase(idOrName: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('customers')
+      .delete()
+      .or(`id.eq.${idOrName},name.eq.${idOrName}`);
     return !error;
   } catch {
     return false;
@@ -606,6 +632,16 @@ export async function upsertAppUserToSupabase(user: AppUser): Promise<boolean> {
       },
       { onConflict: 'email' }
     );
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteAppUserFromSupabase(userId: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('app_users').delete().eq('id', userId);
     return !error;
   } catch {
     return false;

@@ -37,6 +37,9 @@ export interface Customer {
   status: 'Contract Active' | 'Pending Renewal' | 'On Hold';
   location: string;
   contractExpiry: string;
+  deletedAt?: string;
+  deletedReason?: string;
+  actorId?: string;
 }
 
 export interface CompanyProfile {
@@ -129,6 +132,9 @@ export interface Vehicle {
   avatarBg?: string;
   fuelCapacityL?: number;
   odometerKm?: number;
+  deletedAt?: string;
+  deletedReason?: string;
+  actorId?: string;
 }
 
 export interface ReconcileTransaction {
@@ -280,7 +286,14 @@ export type AuditActionType =
   | 'USER_INVITE'
   | 'ROLE_ASSIGN'
   | 'USER_ACTIVATE'
-  | 'USER_DEACTIVATE';
+  | 'USER_DEACTIVATE'
+  | 'CUSTOMER_DELETE'
+  | 'VEHICLE_DELETE'
+  | 'USER_DELETE'
+  | 'EXPENSE_DELETE'
+  | 'EXPENSE_VOID'
+  | 'TRIP_DELETE'
+  | 'INVOICE_VOID';
 
 export type AuditEntityType =
   | 'INVOICE'
@@ -373,4 +386,7 @@ export interface TripDispatch {
   driverAllowanceKes?: number;
   startDate: string;
   notes?: string;
+  deletedAt?: string;
+  deletedReason?: string;
+  actorId?: string;
 }

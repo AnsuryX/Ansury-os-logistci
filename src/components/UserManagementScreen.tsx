@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AppUser } from '../types';
 import { AppRole, ROLE_METADATA } from '../lib/permissions';
-import { DEMO_USERS } from '../lib/auth';
+import { DEMO_USERS, useAuth } from '../lib/auth';
 import { uniqueId } from '../utils/format';
 
 interface UserManagementScreenProps {
@@ -10,6 +10,7 @@ interface UserManagementScreenProps {
   onUpdateUserRole?: (userId: string, newRole: AppRole, reason: string) => void;
   onToggleUserStatus?: (userId: string, active: boolean, reason: string) => void;
   onResetPassword?: (userId: string, tempSecret: string, reason: string) => void;
+  onDeleteUser?: (userId: string, reason: string) => void;
   onLogAudit?: (entry: {
     actorName: string;
     actorRole: string;
@@ -30,10 +31,12 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
   onUpdateUserRole,
   onToggleUserStatus,
   onResetPassword,
+  onDeleteUser,
   onLogAudit,
   currentActorName = 'Ayub Al-Ansari',
   currentActorRole = 'Super Administrator',
 }) => {
+  const { user: currentAuthUser } = useAuth();
   // Local state seeded with default users
   const [userList, setUserList] = useState<AppUser[]>(
     externalUsers && externalUsers.length > 0
@@ -45,6 +48,10 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
   const [roleFilter, setRoleFilter] = useState<'all' | AppRole>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Deletion Modal
+  const [userToDelete, setUserToDelete] = useState<AppUser | null>(null);
+  const [userDeleteReason, setUserDeleteReason] = useState('');
 
   // Invite Modal
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -504,6 +511,20 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
                           >
                             {u.active ? 'Deactivate' : 'Reactivate'}
                           </button>
+
+                          <button
+                            type="button"
+                            disabled={Boolean(currentAuthUser?.id === u.id || (currentAuthUser?.email && currentAuthUser.email.toLowerCase() === u.email.toLowerCase()))}
+                            onClick={() => {
+                              setUserToDelete(u);
+                              setUserDeleteReason('');
+                            }}
+                            className="px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 transition-colors flex items-center gap-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={currentAuthUser?.id === u.id || (currentAuthUser?.email && currentAuthUser.email.toLowerCase() === u.email.toLowerCase()) ? "Self-deletion prohibited: Cannot remove your active session account" : "Remove / Revoke Operator Access (Admin Only)"}
+                          >
+                            <span className="material-symbols-outlined text-[13px]">delete</span>
+                            <span>Remove</span>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -889,6 +910,99 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
                 >
                   <span className="material-symbols-outlined text-[16px]">verified</span>
                   Issue Credential & Log Audit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Audited Operator Account Removal Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-rose-200 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">person_remove</span>
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-rose-900">Remove Operator Account</h3>
+                  <span className="text-[11px] text-slate-500 font-mono">Policy SEC-01 • Access Revocation</span>
+                </div>
+              </div>
+              <button onClick={() => setUserToDelete(null)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-xs">
+              <div className="font-bold text-slate-900 text-sm">{userToDelete.fullName}</div>
+              <div className="text-slate-600 font-mono">{userToDelete.email}</div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                <span className="text-slate-500">Institutional Role:</span>
+                <span className="font-bold text-slate-800">{ROLE_METADATA[userToDelete.role]?.label || userToDelete.role}</span>
+              </div>
+              {userToDelete.assignedTruck && (
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Assigned Fleet Asset:</span>
+                  <span className="font-mono font-bold text-primary">{userToDelete.assignedTruck}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-900 space-y-1">
+              <span className="font-bold block">Immutable Audit Security Notice:</span>
+              <p className="text-[11px]">
+                Revoking operator access permanently removes this identity from active authentication rosters while preserving all previous financial actions and approval history in the immutable audit trail.
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!userDeleteReason.trim()) {
+                  triggerToast('Error: Mandatory audit rationale is required to remove this operator.');
+                  return;
+                }
+                if (onDeleteUser) {
+                  onDeleteUser(userToDelete.id, userDeleteReason);
+                }
+                setUserList((prev) => prev.filter((u) => u.id !== userToDelete.id));
+                triggerToast(`Operator ${userToDelete.fullName} removed from enterprise roster.`);
+                setUserToDelete(null);
+                setUserDeleteReason('');
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Mandatory Revocation Rationale *
+                </label>
+                <textarea
+                  rows={3}
+                  value={userDeleteReason}
+                  onChange={(e) => setUserDeleteReason(e.target.value)}
+                  placeholder="Reason for revoking operator credentials (e.g. Employment terminated, contractor agreement ended, role relocated)..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-900 focus:outline-none focus:border-rose-600 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setUserToDelete(null)}
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-medium hover:bg-slate-200 text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 text-xs transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[15px]">person_remove</span>
+                  Revoke Access & Delete
                 </button>
               </div>
             </form>

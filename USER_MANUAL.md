@@ -64,6 +64,43 @@ In compliance with international financial compliance and forensic auditing stan
 * To suspend access, click **"Deactivate"**, enter an operational reason (e.g., `Annual leave / Contract suspension`), and confirm. The operator is soft-disabled with immediate token invalidation.
 * To restore access, click **"Reactivate"**, enter an audit justification, and confirm.
 
+### 3.5 Audited Removal & Deletion Workflows (Super Admin Only)
+Super Administrators are empowered to remove or decommission records across the system with strict audit-grade guardrails:
+
+1. **Customers & Petroleum Shippers**:
+   * Locate the customer in **Commercial $\to$ Customers & Shippers**.
+   * Click the **Remove (trash icon)** button on the customer card or **"Remove Shipper"** inside the contract modal.
+   * If the shipper has an outstanding AR balance or active in-transit corridor trips, an alert box is triggered and the administrator is required to type `DELETE` to confirm.
+   * Enter a mandatory **Administrator Rationale** (e.g., `Off-taker contract expired, all balances cleared`).
+   * An immutable `CUSTOMER_DELETE` tombstone is written to the audit ledger.
+
+2. **Fleet Equipment & Prime Movers**:
+   * In **Fleet & Fuel $\to$ Vehicles & Prime Movers**, click the **Remove (trash icon)** on the asset card or **"Decommission Asset"** inside diagnostics.
+   * If the truck is flagged as *Active (In-Transit)*, the system warns that active waybill dispatches will be affected.
+   * Provide a mandatory **Decommission Rationale** (e.g., `Sold asset, unit insurance write-off, fleet upgrade`).
+   * An immutable `VEHICLE_DELETE` record is logged.
+
+3. **Drivers & System Operators**:
+   * In **Identity $\to$ User Management** or the **Drivers** tab, click **"Remove"**.
+   * Self-deletion protection: The active administrator cannot delete their own logged-in account.
+   * Removing a driver unassigns them from their prime mover asset and revokes corridor dispatch access.
+   * An immutable `USER_DELETE` record is logged.
+
+4. **Expense Claims & Corridor Vouchers (Admin & Controller)**:
+   * In **Finance $\to$ Expenses & Approvals**, click **"Void"** on any voucher.
+   * Enter mandatory auditor rationale (e.g., `Duplicate fuel slip, merchant refund, non-business charge`).
+   * The voucher is tombstoned under KRA Section 23 compliance with an immutable `EXPENSE_VOID` audit entry.
+
+5. **Waybills & Dispatch Manifests**:
+   * In **Operations $\to$ Trips & Dispatches**, click the **Remove (trash icon)** or **"Cancel & Remove Waybill"** in the docket view.
+   * Enter mandatory cancellation rationale (e.g., `Shipper cancelled loading docket at Mombasa Port`).
+   * Writes an immutable `TRIP_DELETE` audit entry.
+
+6. **Freight Tax Invoices & Accounts Receivable**:
+   * In **Finance $\to$ Invoices & AR**, click **"Void"** on any unpaid or disputed invoice.
+   * Enter mandatory auditor justification.
+   * The invoice balance is zeroed out and recorded as a voided credit tombstone in the AR sub-ledger.
+
 ---
 
 ## 4. Corridor Driver Guide: Driver Portal & Workstation

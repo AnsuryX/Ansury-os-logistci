@@ -7,18 +7,23 @@ interface CustomersScreenProps {
   customers: Customer[];
   onAddCustomer: (customer: Customer) => void;
   onNavigateToStatements: () => void;
+  onDeleteCustomer?: (customerId: string, reason: string) => void;
 }
 
 export const CustomersScreen: React.FC<CustomersScreenProps> = ({
   customers,
   onAddCustomer,
   onNavigateToStatements,
+  onDeleteCustomer,
 }) => {
   const { role, permissions } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCorridor, setSelectedCorridor] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const triggerToast = (msg: string) => {
@@ -298,11 +303,26 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                   onClick={() => {
                     triggerToast(`Dispatched new waybill docket for ${cust.name}`);
                   }}
-                  className="py-1.5 px-3 bg-primary text-white hover:bg-primary-container rounded-lg font-body-sm text-[11px] font-semibold text-center transition-all flex items-center gap-1"
+                  className="py-1.5 px-2.5 bg-primary text-white hover:bg-primary-container rounded-lg font-body-sm text-[11px] font-semibold text-center transition-all flex items-center gap-1"
                 >
                   <span className="material-symbols-outlined text-[14px]">local_shipping</span>
                   New Trip
                 </button>
+
+                {(role === 'super_admin' || permissions.canDeleteRecords) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerToDelete(cust);
+                      setDeleteReason('');
+                      setDeleteConfirmText('');
+                    }}
+                    className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors shrink-0"
+                    title="Remove Shipper / Customer (Admin Only)"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">delete</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -355,7 +375,24 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
+            <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100">
+              {(role === 'super_admin' || permissions.canDeleteRecords) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = selectedCustomer;
+                    setSelectedCustomer(null);
+                    setCustomerToDelete(target);
+                    setDeleteReason('');
+                    setDeleteConfirmText('');
+                  }}
+                  className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl font-body-sm text-[12px] font-semibold flex items-center gap-1 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[15px]">delete</span>
+                  Remove Shipper
+                </button>
+              ) : <div />}
+
               <button
                 onClick={() => setSelectedCustomer(null)}
                 className="px-4 py-2 bg-primary text-white rounded-xl font-body-sm text-[12px] font-medium"
@@ -363,6 +400,128 @@ export const CustomersScreen: React.FC<CustomersScreenProps> = ({
                 Close Agreement
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audited Customer / Shipper Removal Modal */}
+      {customerToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-md border border-rose-200 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">gavel</span>
+                </span>
+                <div>
+                  <h3 className="font-headline-sm text-base font-bold text-rose-900">
+                    Audited Shipper Removal
+                  </h3>
+                  <span className="font-label-code text-[11px] text-outline">
+                    Admin Governance • Soft-Delete & Audit Rationale
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setCustomerToDelete(null)}
+                className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-surface-container-low rounded-xl text-[12px] space-y-1.5">
+              <div className="font-bold text-on-surface text-[13px]">{customerToDelete.name}</div>
+              <div className="text-outline">TIN: <span className="font-mono text-on-surface">{customerToDelete.tinNumber}</span> • Corridor: {customerToDelete.corridor}</div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200">
+                <span className="text-outline">Outstanding Exposure:</span>
+                <span className={`font-mono font-bold ${customerToDelete.outstandingArUsd > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                  ${customerToDelete.outstandingArUsd.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-outline">Active Trips:</span>
+                <span className="font-bold text-on-surface">{customerToDelete.activeTrips} Active Waybills</span>
+              </div>
+            </div>
+
+            {(customerToDelete.outstandingArUsd > 0 || customerToDelete.activeTrips > 0) && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                <span className="material-symbols-outlined text-amber-700 text-[18px] shrink-0 mt-0.5">warning</span>
+                <div>
+                  <strong>Operational & Financial Notice:</strong> This shipper has active corridor shipments or outstanding receivables. Removal will archive the commercial account while retaining all historical transactions in the immutable ledger.
+                </div>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!deleteReason.trim()) {
+                  triggerToast('Error: Mandatory audit justification is required to delete this customer.');
+                  return;
+                }
+                if (customerToDelete.outstandingArUsd > 0 && deleteConfirmText !== 'DELETE') {
+                  triggerToast('Error: Please type DELETE to confirm removal of customer with open AR.');
+                  return;
+                }
+                if (onDeleteCustomer) {
+                  onDeleteCustomer(customerToDelete.id, deleteReason);
+                }
+                triggerToast(`Customer "${customerToDelete.name}" removed and logged to audit trail.`);
+                setCustomerToDelete(null);
+                setDeleteReason('');
+                setDeleteConfirmText('');
+              }}
+              className="space-y-3 text-[12px]"
+            >
+              <div>
+                <label className="block font-label-sm text-[11px] font-semibold text-outline uppercase mb-1">
+                  Mandatory Administrator Rationale *
+                </label>
+                <textarea
+                  rows={3}
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Explain reason for customer removal (e.g. Contract terminated, off-taker insolvency, merged account)..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface focus:outline-none focus:border-rose-600"
+                  required
+                />
+              </div>
+
+              {customerToDelete.outstandingArUsd > 0 && (
+                <div>
+                  <label className="block font-label-sm text-[11px] font-semibold text-rose-700 uppercase mb-1">
+                    Type DELETE to Confirm *
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="DELETE"
+                    className="w-full px-3 py-2 rounded-xl bg-surface-container-lowest border border-rose-300 text-on-surface font-mono font-bold focus:outline-none focus:border-rose-600"
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCustomerToDelete(null)}
+                  className="px-4 py-2 bg-surface-container-low text-on-surface rounded-xl font-body-sm text-[12px] font-medium hover:bg-surface-container transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-rose-600 text-white rounded-xl font-body-sm text-[12px] font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  Confirm Deletion & Audit Log
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -8,8 +8,9 @@ interface ExpensesScreenProps {
   onOpenQuickExpense: () => void;
   onOpenReceiptAudit: (claim: ExpenseClaim) => void;
   onApproveExpense: (id: string) => void;
-  onRejectExpense: (id: string) => void;
+  onRejectExpense: (id: string, reason?: string) => void;
   onHoldExpense: (id: string) => void;
+  onDeleteExpense?: (id: string, reason: string) => void;
 }
 
 export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
@@ -19,6 +20,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   onApproveExpense,
   onRejectExpense,
   onHoldExpense,
+  onDeleteExpense,
 }) => {
   const { user, role, permissions } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -402,14 +404,16 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setVoidModalClaim(claim)}
-                      className="px-2.5 py-1 rounded-lg text-outline hover:text-rose-600 font-body-sm text-[11px] font-semibold transition-colors flex items-center gap-1"
-                      title="Audited Void (Soft Delete with Reason)"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">delete</span>
-                      <span>Void</span>
-                    </button>
+                    {(role === 'super_admin' || role === 'finance_controller' || permissions.canDeleteRecords) && (
+                      <button
+                        onClick={() => setVoidModalClaim(claim)}
+                        className="px-2.5 py-1 rounded-lg text-outline hover:text-rose-600 font-body-sm text-[11px] font-semibold transition-colors flex items-center gap-1 border border-slate-200 hover:border-rose-300"
+                        title="Audited Void & Delete Voucher (Controller / Admin Only)"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">delete</span>
+                        <span>Void</span>
+                      </button>
+                    )}
 
                     <button
                       disabled={!permissions.canApproveExpenses}
@@ -613,7 +617,11 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                   triggerToast('Error: Mandatory audit justification is required to void this claim.');
                   return;
                 }
-                onRejectExpense(voidModalClaim.id);
+                if (onDeleteExpense) {
+                  onDeleteExpense(voidModalClaim.id, voidReason);
+                } else {
+                  onRejectExpense(voidModalClaim.id, voidReason);
+                }
                 triggerToast(`Claim ${voidModalClaim.claimNumber} voided with audit tombstone. Logged to immutable audit trail.`);
                 setVoidModalClaim(null);
                 setVoidReason('');

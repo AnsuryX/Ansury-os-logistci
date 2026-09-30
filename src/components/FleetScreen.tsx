@@ -6,12 +6,16 @@ import { useAuth } from '../lib/auth';
 interface FleetScreenProps {
   vehicles: Vehicle[];
   onAddVehicle: (vehicle: Vehicle) => void;
+  onDeleteVehicle?: (vehicleIdOrReg: string, reason: string) => void;
+  onDeleteDriver?: (driverIdOrName: string, reason: string) => void;
   viewMode?: 'fleet' | 'drivers' | 'fuel';
 }
 
 export const FleetScreen: React.FC<FleetScreenProps> = ({
   vehicles,
   onAddVehicle,
+  onDeleteVehicle,
+  onDeleteDriver,
   viewMode = 'fleet',
 }) => {
   const { role, permissions } = useAuth();
@@ -19,6 +23,10 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
   const [statusFilter, setStatusFilter] = useState('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [vehicleToDelete, setVehicleToDelete] = useState<Vehicle | null>(null);
+  const [vehicleDeleteReason, setVehicleDeleteReason] = useState('');
+  const [driverToDelete, setDriverToDelete] = useState<Vehicle | null>(null);
+  const [driverDeleteReason, setDriverDeleteReason] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'fleet' | 'drivers' | 'fuel'>(viewMode);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -276,15 +284,30 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
                   <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
                   CANBUS Online
                 </span>
-                <button
-                  onClick={() => {
-                    setSelectedVehicle(v);
-                    triggerToast(`Opening diagnostic telemetry for ${v.reg}`);
-                  }}
-                  className="text-primary font-semibold hover:underline font-label-code"
-                >
-                  Diagnostic Log →
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedVehicle(v);
+                      triggerToast(`Opening diagnostic telemetry for ${v.reg}`);
+                    }}
+                    className="text-primary font-semibold hover:underline font-label-code"
+                  >
+                    Diagnostic Log →
+                  </button>
+                  {(role === 'super_admin' || permissions.canDeleteRecords) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVehicleToDelete(v);
+                        setVehicleDeleteReason('');
+                      }}
+                      className="p-1 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors"
+                      title="Decommission & Remove Vehicle Asset (Admin Only)"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">delete</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -303,6 +326,7 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
                 <th className="py-3 px-4">Active Corridor Route</th>
                 <th className="py-3 px-4">Corridor Status</th>
                 <th className="py-3 px-4 text-right">Fuel Score</th>
+                <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eff4ff]">
@@ -324,6 +348,24 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
                   </td>
                   <td className="py-3 px-4 text-right font-label-numeric font-bold text-tertiary">
                     {v.efficiencyPct > 0 ? `+${v.efficiencyPct}%` : `${v.efficiencyPct}%`}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    {(role === 'super_admin' || permissions.canDeleteRecords) ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDriverToDelete(v);
+                          setDriverDeleteReason('');
+                        }}
+                        className="px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors inline-flex items-center gap-1"
+                        title="Remove Driver from Fleet Roster"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">person_remove</span>
+                        <span>Remove</span>
+                      </button>
+                    ) : (
+                      <span className="text-slate-400 text-[11px]">Active</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -419,7 +461,23 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
+            <div className="pt-2 flex items-center justify-between gap-2 border-t border-slate-100">
+              {(role === 'super_admin' || permissions.canDeleteRecords) ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = selectedVehicle;
+                    setSelectedVehicle(null);
+                    setVehicleToDelete(target);
+                    setVehicleDeleteReason('');
+                  }}
+                  className="px-3 py-1.5 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 rounded-xl font-body-sm text-[12px] font-semibold flex items-center gap-1 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[15px]">delete</span>
+                  Decommission Asset
+                </button>
+              ) : <div />}
+
               <button
                 onClick={() => setSelectedVehicle(null)}
                 className="px-4 py-2 bg-primary text-white rounded-xl font-body-sm text-[12px] font-medium"
@@ -427,6 +485,193 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
                 Close Telematics
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Audited Vehicle Asset Decommission / Removal Modal */}
+      {vehicleToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-md border border-rose-200 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">no_crash</span>
+                </span>
+                <div>
+                  <h3 className="font-headline-sm text-base font-bold text-rose-900">
+                    Decommission Fleet Asset
+                  </h3>
+                  <span className="font-label-code text-[11px] text-outline">
+                    Admin Governance • Audit-Grade Equipment Removal
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setVehicleToDelete(null)}
+                className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-surface-container-low rounded-xl text-[12px] space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="font-mono font-bold text-on-surface text-[14px] text-primary">{vehicleToDelete.reg}</span>
+                <span className="font-label-code text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-200 text-slate-800">
+                  {vehicleToDelete.status}
+                </span>
+              </div>
+              <div className="text-outline">{vehicleToDelete.makeModel} • Driver: <strong className="text-on-surface">{vehicleToDelete.driver}</strong></div>
+              <div className="text-[11px] text-outline">Corridor: {vehicleToDelete.corridor}</div>
+            </div>
+
+            {vehicleToDelete.status === 'Active' && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                <span className="material-symbols-outlined text-amber-700 text-[18px] shrink-0 mt-0.5">warning</span>
+                <div>
+                  <strong>Active Corridor Haulage Alert:</strong> This prime mover is currently flagged as In-Transit. Decommissioning will unassign active waybill links and write an immutable audit record.
+                </div>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!vehicleDeleteReason.trim()) {
+                  triggerToast('Error: Mandatory audit justification is required to decommission this vehicle.');
+                  return;
+                }
+                if (onDeleteVehicle) {
+                  onDeleteVehicle(vehicleToDelete.id, vehicleDeleteReason);
+                }
+                triggerToast(`Asset ${vehicleToDelete.reg} decommissioned. Audit log written.`);
+                setVehicleToDelete(null);
+                setVehicleDeleteReason('');
+              }}
+              className="space-y-3 text-[12px]"
+            >
+              <div>
+                <label className="block font-label-sm text-[11px] font-semibold text-outline uppercase mb-1">
+                  Mandatory Decommission Rationale *
+                </label>
+                <textarea
+                  rows={3}
+                  value={vehicleDeleteReason}
+                  onChange={(e) => setVehicleDeleteReason(e.target.value)}
+                  placeholder="Reason for asset removal (e.g. Asset sold, total loss insurance write-off, lease expired, transferred)..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface focus:outline-none focus:border-rose-600"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setVehicleToDelete(null)}
+                  className="px-4 py-2 bg-surface-container-low text-on-surface rounded-xl font-body-sm text-[12px] font-medium hover:bg-surface-container transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-rose-600 text-white rounded-xl font-body-sm text-[12px] font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  Confirm Decommission & Audit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Audited Driver Roster Removal Modal */}
+      {driverToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-md border border-rose-200 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">person_remove</span>
+                </span>
+                <div>
+                  <h3 className="font-headline-sm text-base font-bold text-rose-900">
+                    Remove Driver from Roster
+                  </h3>
+                  <span className="font-label-code text-[11px] text-outline">
+                    Admin Governance • Driver Profile Revocation
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setDriverToDelete(null)}
+                className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-surface-container-low rounded-xl text-[12px] space-y-1.5">
+              <div className="font-bold text-on-surface text-[13px]">{driverToDelete.driver}</div>
+              <div className="text-outline">Driver ID: <span className="font-mono text-on-surface">{driverToDelete.driverId}</span></div>
+              <div className="text-outline">Assigned Prime Mover: <span className="font-mono font-bold text-primary">{driverToDelete.reg}</span></div>
+            </div>
+
+            <div className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl text-[11px] text-rose-900 space-y-1">
+              <span className="font-bold block">Operator Roster Notice:</span>
+              <p>
+                Removing this operator unassigns them from prime mover {driverToDelete.reg} and revokes their active corridor driver status. Historical fuel and voucher telemetry will remain intact in the immutable audit log.
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!driverDeleteReason.trim()) {
+                  triggerToast('Error: Mandatory audit justification is required to remove this driver.');
+                  return;
+                }
+                if (onDeleteDriver) {
+                  onDeleteDriver(driverToDelete.driverId || driverToDelete.driver, driverDeleteReason);
+                }
+                triggerToast(`Driver "${driverToDelete.driver}" removed from fleet roster.`);
+                setDriverToDelete(null);
+                setDriverDeleteReason('');
+              }}
+              className="space-y-3 text-[12px]"
+            >
+              <div>
+                <label className="block font-label-sm text-[11px] font-semibold text-outline uppercase mb-1">
+                  Mandatory Removal Rationale *
+                </label>
+                <textarea
+                  rows={3}
+                  value={driverDeleteReason}
+                  onChange={(e) => setDriverDeleteReason(e.target.value)}
+                  placeholder="Specify reason for driver removal (e.g. Contract terminated, resignation, transfer to third-party sub-contractor)..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface focus:outline-none focus:border-rose-600"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDriverToDelete(null)}
+                  className="px-4 py-2 bg-surface-container-low text-on-surface rounded-xl font-body-sm text-[12px] font-medium hover:bg-surface-container transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-rose-600 text-white rounded-xl font-body-sm text-[12px] font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[16px]">person_remove</span>
+                  Confirm Driver Removal
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

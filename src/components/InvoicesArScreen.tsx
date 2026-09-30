@@ -20,6 +20,7 @@ interface InvoicesArScreenProps {
   onNavigate?: (path: NavigationPath) => void;
   onNavigateToStatements?: () => void;
   onRecordBankPayment?: (invoice: Invoice, amount: number, ref: string) => void;
+  onDeleteInvoice?: (invoiceId: string, reason: string) => void;
 }
 
 export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
@@ -32,6 +33,7 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
   onRecordInvoicePayment,
   onNavigate,
   onNavigateToStatements,
+  onDeleteInvoice,
 }) => {
   const { role, permissions } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>(externalInvoices || INITIAL_INVOICES);
@@ -57,6 +59,10 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
   const [selectedInvoiceForRefund, setSelectedInvoiceForRefund] = useState<Invoice | null>(null);
   const [refundReason, setRefundReason] = useState<string>('');
   const [refundAmount, setRefundAmount] = useState<string>('');
+
+  // Audited Void / Delete State
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
+  const [invoiceDeleteReason, setInvoiceDeleteReason] = useState('');
 
   // Create Invoice Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -726,6 +732,22 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
                               <span>Refund</span>
                             </button>
                           )}
+
+                          {/* Void / Delete Invoice Button */}
+                          {inv.status !== 'voided' && (role === 'super_admin' || role === 'finance_controller' || permissions.canDeleteRecords) && (
+                            <button
+                              disabled={!permissions.canManageInvoices}
+                              onClick={() => {
+                                setInvoiceToDelete(inv);
+                                setInvoiceDeleteReason('');
+                              }}
+                              className="px-2 py-1 rounded-lg bg-surface-container-low hover:bg-rose-50 text-outline hover:text-rose-700 font-body-sm text-[11px] font-semibold transition-colors border border-[#dce9ff] hover:border-rose-200 flex items-center gap-0.5 disabled:opacity-40"
+                              title="Audited Void & Cancel Invoice (Controller / Admin Only)"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">delete</span>
+                              <span>Void</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -1055,6 +1077,125 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
                 >
                   <span className="material-symbols-outlined text-[16px]">send</span>
                   Issue & Send Invoice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Audited Invoice Void / Cancel Modal */}
+      {invoiceToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-2xl w-full max-w-md border border-rose-200 shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">receipt_long</span>
+                </span>
+                <div>
+                  <h3 className="font-headline-sm text-base font-bold text-rose-900">
+                    Audited Invoice Void
+                  </h3>
+                  <span className="font-label-code text-[11px] text-outline">
+                    Financial AR Sub-Ledger • Reversal Tombstone
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setInvoiceToDelete(null)}
+                className="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-outline"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-surface-container-low rounded-xl text-[12px] space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="font-mono font-bold text-primary text-[13px]">{invoiceToDelete.invoiceNumber}</span>
+                <span className="font-label-code text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-200 text-slate-800">
+                  {invoiceToDelete.status.toUpperCase()}
+                </span>
+              </div>
+              <div className="font-semibold text-on-surface">{invoiceToDelete.customerName}</div>
+              <div className="text-outline">Waybill: {invoiceToDelete.waybillNumber} • {invoiceToDelete.truckReg}</div>
+              <div className="flex justify-between pt-1 border-t border-slate-200 text-[11px]">
+                <span>Invoiced Amount:</span>
+                <span className="font-mono font-bold text-on-surface">{formatMoney(invoiceToDelete.totalAmount)}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span>Outstanding Balance:</span>
+                <span className="font-mono font-bold text-rose-700">{formatMoney(invoiceToDelete.remainingBalance)}</span>
+              </div>
+            </div>
+
+            {invoiceToDelete.paidAmount > 0 && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-start gap-2">
+                <span className="material-symbols-outlined text-amber-700 text-[18px] shrink-0 mt-0.5">warning</span>
+                <div>
+                  <strong>Partial Receipts Detected:</strong> {formatMoney(invoiceToDelete.paidAmount)} has already been received against this invoice. Voiding will zero out remaining balance and record a fiscal credit adjustment in the immutable audit trail.
+                </div>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!invoiceDeleteReason.trim()) {
+                  triggerToast('Error: Mandatory audit justification is required to void this invoice.');
+                  return;
+                }
+                if (onDeleteInvoice) {
+                  onDeleteInvoice(invoiceToDelete.id, invoiceDeleteReason);
+                } else {
+                  setInvoices((prev) =>
+                    prev.map((i) =>
+                      i.id === invoiceToDelete.id
+                        ? {
+                            ...i,
+                            status: 'voided' as const,
+                            remainingBalance: 0,
+                            deletedAt: new Date().toISOString(),
+                            deletedReason: invoiceDeleteReason,
+                          }
+                        : i
+                    )
+                  );
+                }
+                triggerToast(`Invoice ${invoiceToDelete.invoiceNumber} voided with audit tombstone.`);
+                setInvoiceToDelete(null);
+                setInvoiceDeleteReason('');
+              }}
+              className="space-y-3 text-[12px]"
+            >
+              <div>
+                <label className="block font-label-sm text-[11px] font-semibold text-outline uppercase mb-1">
+                  Mandatory Auditor Rationale *
+                </label>
+                <textarea
+                  rows={3}
+                  value={invoiceDeleteReason}
+                  onChange={(e) => setInvoiceDeleteReason(e.target.value)}
+                  placeholder="Specify reason for invoice void (e.g. Erroneous rate billed, cargo demurrage contested, duplicate billing)..."
+                  className="w-full px-3 py-2 rounded-xl bg-surface-container-lowest border border-[#dce9ff] text-on-surface focus:outline-none focus:border-rose-600"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setInvoiceToDelete(null)}
+                  className="px-4 py-2 bg-surface-container-low text-on-surface rounded-xl font-body-sm text-[12px] font-medium hover:bg-surface-container transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-rose-600 text-white rounded-xl font-body-sm text-[12px] font-bold hover:bg-rose-700 transition-colors flex items-center gap-1 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-[16px]">cancel</span>
+                  Confirm Void & Audit
                 </button>
               </div>
             </form>

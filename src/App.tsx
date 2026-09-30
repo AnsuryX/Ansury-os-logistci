@@ -72,6 +72,9 @@ import {
   recordInvoicePaymentToSupabase,
   logAuditEventToSupabase,
   upsertAppUserToSupabase,
+  deleteVehicleFromSupabase,
+  deleteCustomerFromSupabase,
+  deleteAppUserFromSupabase,
   softDeleteExpenseInSupabase,
   softDeleteReconcileTxnInSupabase,
   upsertReconciliationTxnsToSupabase,
@@ -258,6 +261,129 @@ function AppShell() {
       entityId: newCustomer.id,
       newValue: `${newCustomer.name} (${newCustomer.corridor} • ${newCustomer.creditDays}d terms)`,
       reason: `Customer/Shipper onboarded by ${user?.fullName || 'Operator'}`,
+    });
+  };
+
+  // ==========================================
+  // AUDITED DELETION & REMOVAL HANDLERS (ADMIN / CONTROLLER)
+  // ==========================================
+  const handleDeleteCustomer = (customerId: string, reason: string) => {
+    const target = customers.find((c) => c.id === customerId);
+    setCustomers((prev) => prev.filter((c) => c.id !== customerId));
+    deleteCustomerFromSupabase(customerId).catch(() => {});
+    handleLogAudit({
+      action: 'CUSTOMER_DELETE',
+      entityType: 'CUSTOMER',
+      entityId: customerId,
+      previousValue: target?.name || customerId,
+      newValue: 'REMOVED_TOMBSTONE',
+      reason,
+    });
+  };
+
+  const handleDeleteVehicle = (regOrId: string, reason: string) => {
+    const target = vehicles.find((v) => v.id === regOrId || v.reg === regOrId);
+    setVehicles((prev) => prev.filter((v) => v.id !== regOrId && v.reg !== regOrId));
+    deleteVehicleFromSupabase(regOrId).catch(() => {});
+    handleLogAudit({
+      action: 'VEHICLE_DELETE',
+      entityType: 'VEHICLE',
+      entityId: regOrId,
+      previousValue: target ? `${target.reg} (${target.makeModel})` : regOrId,
+      newValue: 'DECOMMISSIONED_TOMBSTONE',
+      reason,
+    });
+  };
+
+  const handleDeleteDriver = (driverIdOrName: string, reason: string) => {
+    setVehicles((prev) =>
+      prev.map((v) =>
+        v.driverId === driverIdOrName || v.driver.toLowerCase() === driverIdOrName.toLowerCase()
+          ? { ...v, driver: 'Unassigned', driverId: 'N/A', driverInitials: '--' }
+          : v
+      )
+    );
+    setAppUsers((prev) =>
+      prev.filter(
+        (u) =>
+          u.id !== driverIdOrName &&
+          u.fullName.toLowerCase() !== driverIdOrName.toLowerCase()
+      )
+    );
+    deleteAppUserFromSupabase(driverIdOrName).catch(() => {});
+    handleLogAudit({
+      action: 'USER_DELETE',
+      entityType: 'USER',
+      entityId: driverIdOrName,
+      newValue: 'DRIVER_ROSTER_REVOKED',
+      reason,
+    });
+  };
+
+  const handleDeleteUser = (userId: string, reason: string) => {
+    const target = appUsers.find((u) => u.id === userId);
+    setAppUsers((prev) => prev.filter((u) => u.id !== userId));
+    deleteAppUserFromSupabase(userId).catch(() => {});
+    handleLogAudit({
+      action: 'USER_DELETE',
+      entityType: 'USER',
+      entityId: userId,
+      previousValue: target ? `${target.fullName} (${target.role})` : userId,
+      newValue: 'USER_DELETED_TOMBSTONE',
+      reason,
+    });
+  };
+
+  const handleDeleteExpense = (expenseId: string, reason: string) => {
+    const claim = expenses.find((e) => e.id === expenseId);
+    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+    softDeleteExpenseInSupabase(expenseId, reason, user?.id).catch(() => {});
+    handleLogAudit({
+      action: 'EXPENSE_VOID',
+      entityType: 'EXPENSE',
+      entityId: expenseId,
+      previousValue: claim ? `${claim.claimNumber} - KES ${claim.amountKes.toLocaleString()}` : expenseId,
+      newValue: 'VOIDED_TOMBSTONE',
+      reason,
+    });
+  };
+
+  const handleDeleteTrip = (tripId: string, reason: string) => {
+    const target = trips.find((t) => t.id === tripId);
+    setTrips((prev) => prev.filter((t) => t.id !== tripId));
+    handleLogAudit({
+      action: 'TRIP_DELETE',
+      entityType: 'TRIP',
+      entityId: tripId,
+      previousValue: target ? `${target.waybillNumber} (${target.truckReg})` : tripId,
+      newValue: 'CANCELLED_WAYBILL_TOMBSTONE',
+      reason,
+    });
+  };
+
+  const handleDeleteInvoice = (invoiceId: string, reason: string) => {
+    const target = invoices.find((i) => i.id === invoiceId);
+    setInvoices((prev) =>
+      prev.map((i) =>
+        i.id === invoiceId
+          ? {
+              ...i,
+              status: 'voided' as const,
+              remainingBalance: 0,
+              deletedAt: new Date().toISOString(),
+              deletedReason: reason,
+              actorId: user?.id,
+            }
+          : i
+      )
+    );
+    handleLogAudit({
+      action: 'INVOICE_VOID',
+      entityType: 'INVOICE',
+      entityId: invoiceId,
+      previousValue: target ? `${target.invoiceNumber} ($${target.totalAmount.toLocaleString()})` : invoiceId,
+      newValue: 'VOIDED_CREDIT_TOMBSTONE',
+      reason,
     });
   };
 
@@ -773,6 +899,7 @@ function AppShell() {
               onApproveExpense={handleApproveExpense}
               onRejectExpense={handleRejectExpense}
               onHoldExpense={handleHoldExpense}
+              onDeleteExpense={handleDeleteExpense}
             />
           )}
 
@@ -785,6 +912,7 @@ function AppShell() {
               customers={customers}
               onAddTrip={handleCreateTrip}
               onUpdateTripStatus={handleUpdateTripStatus}
+              onDeleteTrip={handleDeleteTrip}
               initialOpenCreateModal={isNewTripModalRequested}
             />
           )}
@@ -793,6 +921,8 @@ function AppShell() {
             <FleetScreen
               vehicles={vehicles}
               onAddVehicle={handleAddVehicle}
+              onDeleteVehicle={handleDeleteVehicle}
+              onDeleteDriver={handleDeleteDriver}
               viewMode="fleet"
             />
           )}
@@ -801,6 +931,8 @@ function AppShell() {
             <FleetScreen
               vehicles={vehicles}
               onAddVehicle={handleAddVehicle}
+              onDeleteVehicle={handleDeleteVehicle}
+              onDeleteDriver={handleDeleteDriver}
               viewMode="drivers"
             />
           )}
@@ -809,6 +941,8 @@ function AppShell() {
             <FleetScreen
               vehicles={vehicles}
               onAddVehicle={handleAddVehicle}
+              onDeleteVehicle={handleDeleteVehicle}
+              onDeleteDriver={handleDeleteDriver}
               viewMode="fuel"
             />
           )}
@@ -817,6 +951,7 @@ function AppShell() {
             <CustomersScreen
               customers={customers}
               onAddCustomer={handleAddCustomer}
+              onDeleteCustomer={handleDeleteCustomer}
               onNavigateToStatements={() => setCurrentPath('financial-statements')}
             />
           )}
@@ -848,6 +983,7 @@ function AppShell() {
               onInvoicesChange={handleInvoicesChange}
               onSaveInvoice={handleSaveInvoice}
               onRecordInvoicePayment={handleRecordInvoicePayment}
+              onDeleteInvoice={handleDeleteInvoice}
               onNavigate={(path: NavigationPath) => setCurrentPath(path)}
             />
           )}
@@ -874,6 +1010,7 @@ function AppShell() {
                 onUpdateUserRole={handleUpdateUserRole}
                 onToggleUserStatus={handleToggleUserStatus}
                 onResetPassword={handleResetUserPassword}
+                onDeleteUser={handleDeleteUser}
                 currentActorName={user?.fullName || 'Super Administrator'}
                 currentActorRole={roleMeta?.badgeTitle || 'Super Administrator'}
               />

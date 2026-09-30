@@ -17,6 +17,7 @@ export interface RolePermissions {
   canManageUsers: boolean;
   canEditSettings: boolean;
   canViewAuditLogs: boolean;
+  canDeleteRecords: boolean;
 
   // Finance & Treasury
   canApproveExpenses: boolean;
@@ -119,6 +120,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canManageUsers: true,
     canEditSettings: true,
     canViewAuditLogs: true,
+    canDeleteRecords: true,
     canApproveExpenses: true,
     canSubmitExpenses: true,
     canManageInvoices: true,
@@ -136,6 +138,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canManageUsers: false,
     canEditSettings: false,
     canViewAuditLogs: true,
+    canDeleteRecords: false,
     canApproveExpenses: true,
     canSubmitExpenses: true,
     canManageInvoices: true,
@@ -153,6 +156,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canManageUsers: false,
     canEditSettings: false,
     canViewAuditLogs: false,
+    canDeleteRecords: false,
     canApproveExpenses: false,
     canSubmitExpenses: true,
     canManageInvoices: false,
@@ -170,6 +174,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canManageUsers: false,
     canEditSettings: false,
     canViewAuditLogs: false,
+    canDeleteRecords: false,
     canApproveExpenses: false,
     canSubmitExpenses: true,
     canManageInvoices: false,
@@ -187,6 +192,7 @@ export const ROLE_PERMISSIONS: Record<AppRole, RolePermissions> = {
     canManageUsers: false,
     canEditSettings: false,
     canViewAuditLogs: false,
+    canDeleteRecords: false,
     canApproveExpenses: false,
     canSubmitExpenses: true, // Write-only for submitting expense vouchers for his own truck
     canManageInvoices: false,
