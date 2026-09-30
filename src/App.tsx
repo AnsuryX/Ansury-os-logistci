@@ -38,6 +38,7 @@ import { ReceiptAuditModal } from './components/ReceiptAuditModal';
 import { ClassificationDrawer } from './components/ClassificationDrawer';
 import { ImportCsvModal } from './components/ImportCsvModal';
 import { DashboardScreen } from './components/DashboardScreen';
+import { DriverDashboardScreen } from './components/DriverDashboardScreen';
 import { ReconciliationScreen } from './components/ReconciliationScreen';
 import { ExpensesScreen } from './components/ExpensesScreen';
 import { uniqueId } from './utils/format';
@@ -53,6 +54,7 @@ import { InvoicesArScreen } from './components/InvoicesArScreen';
 import { LaunchQcScreen } from './components/LaunchQcScreen';
 import { AuditViewerScreen } from './components/AuditViewerScreen';
 import { UserManagementScreen } from './components/UserManagementScreen';
+import { UserManualModal } from './components/UserManualModal';
 import {
   fetchVehiclesFromSupabase,
   fetchCustomersFromSupabase,
@@ -142,6 +144,7 @@ function AppShell() {
   const [receiptAuditClaim, setReceiptAuditClaim] = useState<ExpenseClaim | null>(null);
   const [classificationTxn, setClassificationTxn] = useState<ReconcileTransaction | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isUserManualOpen, setIsUserManualOpen] = useState(false);
 
   // Guard routes based on role permissions
   useEffect(() => {
@@ -638,6 +641,18 @@ function AppShell() {
     });
   };
 
+  const handleResetUserPassword = (userId: string, tempSecret: string, reason: string) => {
+    const target = appUsers.find((u) => u.id === userId);
+    handleLogAudit({
+      action: 'UPDATE',
+      entityType: 'USER',
+      entityId: userId,
+      previousValue: target?.email,
+      newValue: 'Temporary credential provisioned (one-time emergency token)',
+      reason: `Admin reset password/PIN: ${reason}`,
+    });
+  };
+
   const handleResolveAnomaly = (id: string, title?: string) => {
     setAnomalies((prev) => prev.filter((a) => a.id !== id));
     handleLogAudit({
@@ -696,6 +711,7 @@ function AppShell() {
         pendingAnomaliesCount={anomalies.length}
         activeVehiclesCount={vehicles.filter((v) => v.status === 'Active').length}
         totalVehiclesCount={vehicles.length}
+        onOpenManual={() => setIsUserManualOpen(true)}
       />
 
       {/* Main Content Area (Offset by Sidebar width 64 = 16rem = 256px) */}
@@ -704,6 +720,7 @@ function AppShell() {
         <Header
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
           onNavigateSettings={() => setCurrentPath('settings')}
+          onOpenManual={() => setIsUserManualOpen(true)}
           notificationCount={anomalies.length}
           companyName={companyProfile.legalName}
           accountNumber={companyProfile.accountNumber}
@@ -713,18 +730,28 @@ function AppShell() {
         {/* Dynamic Route View (offset by Header height 16 = 4rem = 64px) */}
         <main className="pt-16 flex-1">
           {currentPath === 'overview' && (
-            <DashboardScreen
-              vehicles={vehicles}
-              onNavigate={(path) => {
-                if (path === 'trips') {
-                  setIsNewTripModalRequested(true);
-                }
-                setCurrentPath(path);
-              }}
-              onOpenQuickExpense={() => setIsQuickExpenseOpen(true)}
-              userName={user?.fullName || userProfile.fullName}
-              companyName={companyProfile.legalName}
-            />
+            role === 'driver' ? (
+              <DriverDashboardScreen
+                vehicles={vehicles}
+                trips={trips}
+                expenses={expenses}
+                onOpenQuickExpense={() => setIsQuickExpenseOpen(true)}
+                onNavigateToTrips={() => setCurrentPath('trips')}
+              />
+            ) : (
+              <DashboardScreen
+                vehicles={vehicles}
+                onNavigate={(path) => {
+                  if (path === 'trips') {
+                    setIsNewTripModalRequested(true);
+                  }
+                  setCurrentPath(path);
+                }}
+                onOpenQuickExpense={() => setIsQuickExpenseOpen(true)}
+                userName={user?.fullName || userProfile.fullName}
+                companyName={companyProfile.legalName}
+              />
+            )
           )}
 
           {currentPath === 'reconciliation' && (
@@ -846,6 +873,7 @@ function AppShell() {
                 onAddUser={handleAddUser}
                 onUpdateUserRole={handleUpdateUserRole}
                 onToggleUserStatus={handleToggleUserStatus}
+                onResetPassword={handleResetUserPassword}
                 currentActorName={user?.fullName || 'Super Administrator'}
                 currentActorRole={roleMeta?.badgeTitle || 'Super Administrator'}
               />
@@ -872,6 +900,7 @@ function AppShell() {
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={(path) => setCurrentPath(path)}
+        onOpenManual={() => setIsUserManualOpen(true)}
       />
 
       <QuickExpenseDrawer
@@ -899,6 +928,11 @@ function AppShell() {
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         onImportTransactions={handleImportTransactions}
+      />
+
+      <UserManualModal
+        isOpen={isUserManualOpen}
+        onClose={() => setIsUserManualOpen(false)}
       />
     </div>
   );

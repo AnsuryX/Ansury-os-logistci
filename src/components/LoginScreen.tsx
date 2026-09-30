@@ -1,69 +1,161 @@
 import React, { useState } from 'react';
-import { useAuth, DEMO_USERS } from '../lib/auth';
-import { AppRole, ROLE_METADATA } from '../lib/permissions';
+import { useAuth } from '../lib/auth';
 import { LOGO_URL } from '../data/mockData';
 
 export const LoginScreen: React.FC = () => {
-  const { signIn, resetPassword, isLoading } = useAuth();
-  const [email, setEmail] = useState('ayubalansari98@gmail.com');
-  const [password, setPassword] = useState('••••••••••••');
+  const { signIn, resetPassword, confirmPasswordReset, isLoading } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  // Forgot Password Modal
+  // Forgot Password Real Flow State
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetStep, setResetStep] = useState<1 | 2>(1);
   const [resetEmail, setResetEmail] = useState('');
-  const [resetFeedback, setResetFeedback] = useState<string | null>(null);
+  const [resetCode, setResetCode] = useState('');
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+  const [isSubmittingReset, setIsSubmittingReset] = useState(false);
+
+  const triggerToast = (msg: string) => {
+    setSuccessToast(msg);
+    setTimeout(() => setSuccessToast(null), 4000);
+  };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     if (!email.trim()) {
-      setErrorMessage('Please enter an authorized operator email address.');
+      setErrorMessage('Please enter an authorized corporate email address.');
+      return;
+    }
+    if (!password) {
+      setErrorMessage('Please enter your account password.');
       return;
     }
 
-    const res = await signIn(email, password);
+    const res = await signIn(email.trim(), password);
     if (!res.success) {
-      setErrorMessage(res.error || 'Invalid credentials or inactive account.');
+      setErrorMessage(res.error || 'Authentication failed. Please verify your credentials or reset your password.');
     }
   };
 
-  const handleQuickPersonaSelect = async (role: AppRole) => {
-    const targetUser = DEMO_USERS[role];
-    setEmail(targetUser.email);
-    setPassword('Ansury@2026!Secure');
-    await signIn(targetUser.email, 'Ansury@2026!Secure');
+  // Step 1: Request Verification Code
+  const handleRequestCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    setResetSuccess(null);
+
+    const clean = resetEmail.trim().toLowerCase();
+    if (!clean) {
+      setResetError('Please enter your registered corporate email.');
+      return;
+    }
+
+    setIsSubmittingReset(true);
+    try {
+      const res = await resetPassword(clean);
+      if (res.success) {
+        setGeneratedCode(res.verificationCode || null);
+        if (res.verificationCode) {
+          setResetCode(res.verificationCode);
+        }
+        setResetSuccess(res.message);
+        setResetStep(2);
+      } else {
+        setResetError(res.message || 'Unable to process reset request.');
+      }
+    } finally {
+      setIsSubmittingReset(false);
+    }
   };
 
-  const handleResetSubmit = async (e: React.FormEvent) => {
+  // Step 2: Confirm Code & Set Real New Password
+  const handleConfirmReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!resetEmail.trim()) return;
-    const res = await resetPassword(resetEmail);
-    setResetFeedback(res.message);
-    setTimeout(() => {
-      setIsResetModalOpen(false);
-      setResetFeedback(null);
-    }, 2800);
+    setResetError(null);
+    setResetSuccess(null);
+
+    if (!resetCode.trim()) {
+      setResetError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetError('Passwords do not match. Please verify.');
+      return;
+    }
+
+    setIsSubmittingReset(true);
+    try {
+      const res = await confirmPasswordReset(resetEmail.trim(), resetCode.trim(), newPassword);
+      if (res.success) {
+        setResetSuccess(res.message);
+        triggerToast('Password reset successful! You can now sign in.');
+        setEmail(resetEmail.trim());
+        setPassword(newPassword);
+        setTimeout(() => {
+          setIsResetModalOpen(false);
+          setResetStep(1);
+          setResetEmail('');
+          setResetCode('');
+          setNewPassword('');
+          setConfirmPassword('');
+          setGeneratedCode(null);
+          setResetSuccess(null);
+        }, 1800);
+      } else {
+        setResetError(res.message);
+      }
+    } finally {
+      setIsSubmittingReset(false);
+    }
+  };
+
+  const handleOpenResetModal = () => {
+    setResetEmail(email.trim() || 'ayubalansari98@gmail.com');
+    setResetStep(1);
+    setResetError(null);
+    setResetSuccess(null);
+    setGeneratedCode(null);
+    setIsResetModalOpen(true);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative selection:bg-primary/20">
-      {/* Background Decor */}
+      {/* Toast Notification */}
+      {successToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom-3 border border-emerald-500/30">
+          <span className="material-symbols-outlined text-emerald-400 text-[20px]">verified</span>
+          <span className="text-xs font-semibold">{successToast}</span>
+        </div>
+      )}
+
+      {/* Subtle Background Ambience */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl transform -translate-x-1/3 translate-y-1/3"></div>
+        <div className="absolute top-0 right-0 w-[32rem] h-[32rem] bg-blue-500/5 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3"></div>
+        <div className="absolute bottom-0 left-0 w-[32rem] h-[32rem] bg-emerald-500/5 rounded-full blur-3xl transform -translate-x-1/3 translate-y-1/3"></div>
       </div>
 
-      {/* Main Container */}
+      {/* Brand Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center items-center gap-3">
           <img
             src={LOGO_URL}
             alt="Ansury Logistics OS"
-            className="h-10 w-auto object-contain"
+            className="h-11 w-auto object-contain shrink-0"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
@@ -79,28 +171,29 @@ export const LoginScreen: React.FC = () => {
         </div>
       </div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-lg relative z-10 px-4 sm:px-0">
-        <div className="bg-white py-8 px-6 shadow-xl shadow-slate-200/50 rounded-2xl border border-slate-200 sm:px-10 space-y-6">
+      {/* Form Card */}
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4 sm:px-0">
+        <div className="bg-white py-8 px-6 shadow-xl shadow-slate-200/60 rounded-2xl border border-slate-200 sm:px-10 space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h2 className="text-lg font-bold text-slate-900 tracking-tight">
               Operator Sign In
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Authenticate using your institutional dispatch or treasury credentials.
+              Authenticate using your institutional dispatch, finance, or driver credentials.
             </p>
           </div>
 
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
-              <span className="material-symbols-outlined text-red-600 text-[18px]">error</span>
-              <span>{errorMessage}</span>
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5 animate-in fade-in duration-200">
+              <span className="material-symbols-outlined text-rose-600 text-[18px] shrink-0 mt-0.5">error</span>
+              <span className="leading-snug">{errorMessage}</span>
             </div>
           )}
 
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
-                Official Email Address
+                Corporate Email Address
               </label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-[18px]">
@@ -111,8 +204,8 @@ export const LoginScreen: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@ansury.com"
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                  placeholder="e.g. operator@ansury.com"
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-medium"
                 />
               </div>
             </div>
@@ -124,7 +217,7 @@ export const LoginScreen: React.FC = () => {
                 </label>
                 <button
                   type="button"
-                  onClick={() => setIsResetModalOpen(true)}
+                  onClick={handleOpenResetModal}
                   className="text-[11px] text-primary hover:text-primary-container font-semibold transition-colors"
                 >
                   Forgot Password?
@@ -139,6 +232,7 @@ export const LoginScreen: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your account password"
                   className="w-full pl-9 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all font-mono"
                 />
                 <button
@@ -154,17 +248,17 @@ export const LoginScreen: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="rounded border-slate-300 text-primary focus:ring-primary w-3.5 h-3.5"
                 />
-                <span className="text-xs text-slate-600">Remember this workstation node</span>
+                <span className="text-xs text-slate-600">Remember this workstation</span>
               </label>
-              <span className="text-[11px] text-slate-400 font-mono">Policy SEC-01</span>
+              <span className="text-[10px] text-slate-400 font-mono">SEC-01 Guard</span>
             </div>
 
             <button
@@ -177,66 +271,35 @@ export const LoginScreen: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick Demo Personas Bar */}
-          <div className="pt-5 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Instant Persona Switcher (RBAC Testing)
-              </span>
-              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
-                5 Roles
-              </span>
+          {/* Quick Credential Helper Note */}
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-slate-800">
+              <span className="material-symbols-outlined text-primary text-[16px]">info</span>
+              <span>Default Initial Access</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {(Object.keys(DEMO_USERS) as AppRole[]).map((roleKey) => {
-                const persona = DEMO_USERS[roleKey];
-                const meta = ROLE_METADATA[roleKey];
-                const isSelected = email.toLowerCase() === persona.email.toLowerCase();
-
-                return (
-                  <button
-                    key={roleKey}
-                    type="button"
-                    onClick={() => handleQuickPersonaSelect(roleKey)}
-                    className={`p-2.5 rounded-xl border text-left transition-all flex flex-col justify-between ${
-                      isSelected
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                        : 'border-slate-200 bg-slate-50/50 hover:bg-slate-100/70 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-slate-900 truncate">
-                        {persona.fullName}
-                      </span>
-                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${meta.badgeColor}`}>
-                        {roleKey === 'driver' ? 'READ-ONLY' : roleKey.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-slate-500 font-mono truncate mt-1">
-                      {persona.email}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <p className="text-slate-500 leading-snug">
+              Sign in with <span className="font-mono font-bold text-slate-700">ayubalansari98@gmail.com</span> and password <span className="font-mono font-bold text-slate-700">Ansury@2026!</span>, or use your corporate assigned email.
+            </p>
           </div>
 
           {/* Security Node Footer */}
           <div className="pt-2 text-center text-[11px] text-slate-400 flex items-center justify-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Cryptographic Node · Supabase JWT & RLS Enforced</span>
+            <span>Cryptographic Node · Supabase JWT &amp; RLS Enforced</span>
           </div>
         </div>
       </div>
 
-      {/* Forgot Password Modal */}
+      {/* REAL FORGOT PASSWORD MODAL */}
       {isResetModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-[22px]">lock_reset</span>
-                <h3 className="text-base font-bold text-slate-900">Reset Operator Password</h3>
+                <h3 className="text-base font-bold text-slate-900">
+                  {resetStep === 1 ? 'Reset Operator Password' : 'Enter Code & Set New Password'}
+                </h3>
               </div>
               <button
                 onClick={() => setIsResetModalOpen(false)}
@@ -246,47 +309,163 @@ export const LoginScreen: React.FC = () => {
               </button>
             </div>
 
-            <p className="text-xs text-slate-600">
-              Enter your registered corporate email. If your account is provisioned in the identity directory, an encrypted password reset dispatch will be delivered.
-            </p>
-
-            {resetFeedback && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
-                {resetFeedback}
+            {resetError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <span className="material-symbols-outlined text-rose-600 text-[18px]">error</span>
+                <span>{resetError}</span>
               </div>
             )}
 
-            <form onSubmit={handleResetSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                  Operator Email
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="operator@ansury.com"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+            {resetSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-start gap-2">
+                <span className="material-symbols-outlined text-emerald-600 text-[18px] shrink-0 mt-0.5">verified</span>
+                <span>{resetSuccess}</span>
               </div>
+            )}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsResetModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-container shadow-sm"
-                >
-                  Send Reset Link
-                </button>
-              </div>
-            </form>
+            {resetStep === 1 ? (
+              <form onSubmit={handleRequestCode} className="space-y-4 text-xs">
+                <p className="text-slate-600">
+                  Enter your registered corporate email address. A real 6-digit cryptographic verification code will be generated for your session node.
+                </p>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                    Corporate Email *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="e.g. ayubalansari98@gmail.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsResetModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingReset}
+                    className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-container shadow-sm flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">send</span>
+                    <span>{isSubmittingReset ? 'Dispatching...' : 'Generate Verification Code'}</span>
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleConfirmReset} className="space-y-4 text-xs">
+                {generatedCode && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-950 space-y-1">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-blue-800">
+                      Active Node Security Dispatch
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-lg font-bold tracking-widest text-primary">
+                        {generatedCode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResetCode(generatedCode);
+                          triggerToast('Code auto-filled!');
+                        }}
+                        className="text-[11px] font-semibold text-primary underline"
+                      >
+                        Auto-Fill Code
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-blue-700">
+                      Code valid for 15 minutes. Enter code and specify your new password below.
+                    </p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                    6-Digit Verification Code *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={resetCode}
+                    onChange={(e) => setResetCode(e.target.value)}
+                    placeholder="e.g. 582914"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono font-bold tracking-wider text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      New Password *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="At least 6 characters"
+                        className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          {showNewPassword ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      Confirm New Password *
+                    </label>
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Re-enter new password"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setResetStep(1)}
+                    className="text-slate-500 hover:text-slate-700 text-xs font-semibold"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingReset}
+                    className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary-container shadow-sm flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">verified</span>
+                    <span>{isSubmittingReset ? 'Updating...' : 'Set New Password & Authenticate'}</span>
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

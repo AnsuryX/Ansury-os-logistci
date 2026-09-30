@@ -1,0 +1,6 @@
+# Ansury Logistics OS
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: /sitemap.xml

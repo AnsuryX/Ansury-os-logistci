@@ -1,0 +1,17 @@
+{
+  "name": "Ansury OS Enterprise Haul",
+  "short_name": "Ansury OS",
+  "description": "Real-time telematics, East African corridor fleet dispatch, M-Pesa liquidity reconciliation, and unit economics treasury system.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1c30",
+  "theme_color": "#0b1c30",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { safeInitials } from '../utils/format';
-import { useAuth, DEMO_USERS } from '../lib/auth';
-import { AppRole, ROLE_METADATA } from '../lib/permissions';
+import { useAuth } from '../lib/auth';
+import { ROLE_METADATA } from '../lib/permissions';
 
 interface HeaderProps {
   onOpenCommandPalette: () => void;
   onNavigateSettings?: () => void;
+  onOpenManual?: () => void;
   notificationCount?: number;
   companyName?: string;
   accountNumber?: string;
@@ -16,15 +17,16 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onOpenCommandPalette,
   onNavigateSettings,
+  onOpenManual,
   notificationCount = 3,
   companyName = 'BEYAYAN LIMITED',
   accountNumber = '01306297851250',
   userName,
   exchangeRate = 127.20,
 }) => {
-  const { user, role, switchPersona } = useAuth();
+  const { user, role, signOut } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showPersonaMenu, setShowPersonaMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const activeName = user?.fullName || userName || 'David Kimani';
   const initials = safeInitials(activeName);
@@ -72,6 +74,20 @@ export const Header: React.FC<HeaderProps> = ({
             1 USD = {exchangeRate.toFixed(2)} KES
           </span>
         </div>
+
+        {/* User Manual & Help Button */}
+        {onOpenManual && (
+          <button
+            aria-label="Operations & User Manual"
+            onClick={onOpenManual}
+            title="Open Operations & User Manual (USER_MANUAL.md)"
+            className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-primary transition-colors flex items-center gap-1"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[20px]">menu_book</span>
+            <span className="text-[11px] font-semibold text-slate-700 hidden xl:inline">Manual</span>
+          </button>
+        )}
 
         {/* Notification Bell */}
         <div className="relative">
@@ -143,9 +159,9 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Company & Profile Info */}
         <div className="relative">
           <div
-            onClick={() => setShowPersonaMenu(!showPersonaMenu)}
-            className="flex items-center gap-2 pl-2 border-l border-[#e5eeff] cursor-pointer hover:opacity-85 transition-opacity"
-            title="Click to view role and switch persona"
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex items-center gap-2 pl-2 border-l border-[#e5eeff] cursor-pointer hover:opacity-90 transition-opacity"
+            title="Account profile and options"
           >
             <div className="flex flex-col text-right hidden sm:flex">
               <span className="font-headline-sm text-[12px] text-on-surface leading-tight truncate max-w-[180px] font-bold">
@@ -160,66 +176,53 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Persona Quick Switcher Dropdown */}
-          {showPersonaMenu && (
-            <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 z-50 animate-in fade-in slide-in-from-top-2">
+          {/* Professional Operator Account Dropdown */}
+          {showUserMenu && (
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 z-50 animate-in fade-in slide-in-from-top-2">
               <div className="border-b border-slate-100 pb-2 mb-2">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  Switch Active Persona (SEC-01)
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Authenticated Node
                 </div>
-                <div className="text-xs text-slate-700 font-semibold truncate mt-0.5">
-                  Logged in as {activeName}
+                <div className="text-xs text-slate-900 font-bold truncate mt-0.5">
+                  {activeName}
+                </div>
+                <div className="text-[11px] text-slate-500 font-mono truncate">
+                  {user?.email || 'operator@ansury.com'}
+                </div>
+                <div className="mt-1.5 inline-block">
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${roleMeta?.badgeColor || 'bg-primary text-white'}`}>
+                    {roleMeta?.label || role}
+                  </span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                {(Object.keys(DEMO_USERS) as AppRole[]).map((rKey) => {
-                  const p = DEMO_USERS[rKey];
-                  const m = ROLE_METADATA[rKey];
-                  const isCurrent = role === rKey;
-
-                  return (
-                    <button
-                      key={rKey}
-                      type="button"
-                      onClick={() => {
-                        switchPersona(rKey);
-                        setShowPersonaMenu(false);
-                      }}
-                      className={`w-full text-left p-2 rounded-xl transition-all flex items-center justify-between text-xs ${
-                        isCurrent
-                          ? 'bg-primary/10 text-primary font-bold'
-                          : 'hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <div className="min-w-0 pr-1">
-                        <div className="truncate">{p.fullName}</div>
-                        <div className="text-[10px] text-slate-400 font-mono truncate">{m.label}</div>
-                      </div>
-                      {isCurrent && (
-                        <span className="material-symbols-outlined text-[16px] text-primary">
-                          check_circle
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {onNavigateSettings && (
-                <div className="pt-2 mt-2 border-t border-slate-100">
+                {onNavigateSettings && (
                   <button
                     type="button"
                     onClick={() => {
-                      setShowPersonaMenu(false);
+                      setShowUserMenu(false);
                       onNavigateSettings();
                     }}
-                    className="w-full text-center py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors"
+                    className="w-full text-left p-2 rounded-xl hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-2 transition-colors"
                   >
-                    Open Settings & Profile
+                    <span className="material-symbols-outlined text-[17px] text-slate-500">settings</span>
+                    <span>Account Settings &amp; Security</span>
                   </button>
-                </div>
-              )}
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    signOut();
+                  }}
+                  className="w-full text-left p-2 rounded-xl hover:bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-2 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[17px] text-rose-600">logout</span>
+                  <span>Sign Out of Ansury OS</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

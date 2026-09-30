@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Rounded Shield Base -->
+  <rect width="64" height="64" rx="16" fill="#0b1c30" />
+  
+  <!-- Outer Subtle Border -->
+  <rect x="1" y="1" width="62" height="62" rx="15" stroke="#1e3a5f" stroke-width="2" />
+  
+  <!-- Gradient Definition -->
+  <defs>
+    <linearGradient id="ansuryGrad" x1="12" y1="12" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="20" y1="20" x2="44" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Stylized Geometric 'A' / Fleet Corridor Chevron -->
+  <path d="M32 12L49 44H39.5L32 29L24.5 44H15L32 12Z" fill="url(#ansuryGrad)" />
+  
+  <!-- Cross-Corridor Dynamic Arrow / Forward Track -->
+  <path d="M22 36H42L38 43H26L22 36Z" fill="#ffffff" opacity="0.9" />
+  
+  <!-- Telemetry Pulse Node -->
+  <circle cx="32" cy="22" r="3" fill="#38bdf8" />
+</svg>

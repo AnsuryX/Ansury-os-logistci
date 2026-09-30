@@ -127,6 +127,8 @@ export interface Vehicle {
   fuelCostKes: number;
   status: 'Anomaly' | 'Active' | 'Completed' | 'Maintenance';
   avatarBg?: string;
+  fuelCapacityL?: number;
+  odometerKm?: number;
 }
 
 export interface ReconcileTransaction {

@@ -24,6 +24,7 @@ interface SidebarProps {
   pendingAnomaliesCount?: number;
   activeVehiclesCount?: number;
   totalVehiclesCount?: number;
+  onOpenManual?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -32,11 +33,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingAnomaliesCount = 0,
   activeVehiclesCount = 10,
   totalVehiclesCount = 12,
+  onOpenManual,
 }) => {
   const { user, role, permissions, signOut } = useAuth();
   const roleMeta = ROLE_METADATA[role];
 
-  const navSections: NavSection[] = [
+  const driverSections: NavSection[] = [
+    {
+      title: 'DRIVER PORTAL',
+      items: [
+        { path: 'overview' as NavigationPath, label: 'My Truck & Dashboard', icon: 'local_shipping' },
+      ],
+    },
+    {
+      title: 'MY OPERATIONS',
+      items: [
+        { path: 'trips' as NavigationPath, label: 'My Dispatches & Waybills', icon: 'alt_route' },
+        { path: 'expenses' as NavigationPath, label: 'My Vouchers & Receipts', icon: 'receipt_long' },
+      ],
+    },
+    {
+      title: 'CORRIDOR SUPPORT',
+      items: [
+        { path: 'fuel-control' as NavigationPath, label: 'Approved Fuel Depots', icon: 'local_gas_station' },
+        { path: 'settings' as NavigationPath, label: 'Driver Profile & Security', icon: 'person' },
+      ],
+    },
+  ];
+
+  const standardNavSections: NavSection[] = [
     {
       title: 'OVERVIEW',
       items: [
@@ -145,6 +170,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
+  const navSections = role === 'driver' ? driverSections : standardNavSections;
+
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-surface-container-lowest z-50 flex flex-col shadow-[0_1px_8px_rgba(0,0,0,0.04)] border-r border-[#e5eeff]">
       {/* Brand Header */}
@@ -244,6 +271,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Operations Manual Quick Action */}
+      {onOpenManual && (
+        <div className="px-space-sm pb-2">
+          <button
+            type="button"
+            onClick={onOpenManual}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-blue-50/80 hover:bg-blue-100 text-blue-950 border border-blue-200/80 transition-all font-body-sm text-[12px] font-semibold group shadow-2xs"
+          >
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px] text-blue-700 group-hover:scale-105 transition-transform">
+                menu_book
+              </span>
+              <span>Operations Manual</span>
+            </div>
+            <span className="text-[10px] font-mono bg-blue-200/70 text-blue-900 px-1.5 py-0.5 rounded font-bold">
+              DOCS
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Telemetry Status Footer */}
       <div className="p-space-sm bg-surface-container-low border-t border-[#e5eeff] space-y-2">

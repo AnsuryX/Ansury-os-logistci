@@ -9,6 +9,7 @@ interface UserManagementScreenProps {
   onAddUser?: (user: AppUser) => void;
   onUpdateUserRole?: (userId: string, newRole: AppRole, reason: string) => void;
   onToggleUserStatus?: (userId: string, active: boolean, reason: string) => void;
+  onResetPassword?: (userId: string, tempSecret: string, reason: string) => void;
   onLogAudit?: (entry: {
     actorName: string;
     actorRole: string;
@@ -28,6 +29,7 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
   onAddUser,
   onUpdateUserRole,
   onToggleUserStatus,
+  onResetPassword,
   onLogAudit,
   currentActorName = 'Ayub Al-Ansari',
   currentActorRole = 'Super Administrator',
@@ -60,6 +62,13 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
   // Status Change Confirmation Modal
   const [selectedUserForStatusToggle, setSelectedUserForStatusToggle] = useState<AppUser | null>(null);
   const [statusToggleReason, setStatusToggleReason] = useState('');
+
+  // Password Reset Modal
+  const [selectedUserForPasswordReset, setSelectedUserForPasswordReset] = useState<AppUser | null>(null);
+  const [tempPassword, setTempPassword] = useState('');
+  const [resetReason, setResetReason] = useState('');
+  const [requirePasswordChange, setRequirePasswordChange] = useState(true);
+  const [copiedPassword, setCopiedPassword] = useState(false);
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -189,6 +198,61 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
     triggerToast(`Operator account ${selectedUserForStatusToggle.fullName} marked as ${newStatus ? 'Active' : 'Deactivated'}`);
     setSelectedUserForStatusToggle(null);
     setStatusToggleReason('');
+  };
+
+  const generateSecureTempPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$';
+    let code = 'Ansury-';
+    for (let i = 0; i < 4; i++) {
+      code += chars.charAt(Math.floor(Math.random() * (chars.length - 4)));
+    }
+    code += '#';
+    code += Math.floor(1000 + Math.random() * 9000);
+    return code;
+  };
+
+  const handleOpenPasswordReset = (targetUser: AppUser) => {
+    setSelectedUserForPasswordReset(targetUser);
+    setTempPassword(generateSecureTempPassword());
+    setResetReason('Routine administrative credential rotation & secure access dispatch');
+    setCopiedPassword(false);
+  };
+
+  const handlePasswordResetSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserForPasswordReset) return;
+
+    if (!resetReason.trim()) {
+      triggerToast('Error: Audit justification is mandatory for resetting operator credentials.');
+      return;
+    }
+
+    const targetUserId = selectedUserForPasswordReset.id;
+
+    onResetPassword?.(targetUserId, tempPassword, resetReason);
+
+    onLogAudit?.({
+      actorName: currentActorName,
+      actorRole: currentActorRole,
+      action: 'UPDATE',
+      entityType: 'USER',
+      entityId: targetUserId,
+      previousValue: 'Existing Password Hash',
+      newValue: 'Temporary One-Time Credential Issued (Expiring 24H)',
+      reason: `Password reset executed: ${resetReason}. Force reset on login: ${requirePasswordChange}`,
+    });
+
+    triggerToast(`Temporary credential generated for ${selectedUserForPasswordReset.fullName}. Sent to audit log.`);
+    setSelectedUserForPasswordReset(null);
+    setTempPassword('');
+    setResetReason('');
+  };
+
+  const handleCopyPassword = () => {
+    navigator.clipboard.writeText(tempPassword);
+    setCopiedPassword(true);
+    triggerToast('Temporary password copied to clipboard!');
+    setTimeout(() => setCopiedPassword(false), 2500);
   };
 
   return (
@@ -407,7 +471,17 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
                       </td>
 
                       <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPasswordReset(u)}
+                            title="Reset password or issue one-time emergency PIN"
+                            className="px-2 py-1 text-[11px] font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-300 transition-colors flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">lock_reset</span>
+                            <span>Reset Credential</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -695,6 +769,126 @@ export const UserManagementScreen: React.FC<UserManagementScreenProps> = ({
                   }`}
                 >
                   {selectedUserForStatusToggle.active ? 'Confirm Deactivation' : 'Confirm Reactivation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Password Reset & One-Time PIN Modal */}
+      {selectedUserForPasswordReset && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-[22px]">lock_reset</span>
+                <h3 className="text-base font-bold text-slate-900">
+                  Reset Operator Credential
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedUserForPasswordReset(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1">
+              <div className="font-bold text-slate-900">{selectedUserForPasswordReset.fullName}</div>
+              <div className="text-slate-500 font-mono text-[11px]">{selectedUserForPasswordReset.email}</div>
+              <div className="text-slate-600 pt-1">
+                Role: <span className="font-bold">{ROLE_METADATA[selectedUserForPasswordReset.role].label}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handlePasswordResetSubmit} className="space-y-4 text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-600 uppercase">
+                    Temporary One-Time Password / PIN *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setTempPassword(generateSecureTempPassword())}
+                    className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-0.5"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">autorenew</span>
+                    Regenerate
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={tempPassword}
+                    onChange={(e) => setTempPassword(e.target.value)}
+                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary font-mono font-bold text-slate-800"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyPassword}
+                    className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-colors ${
+                      copiedPassword
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                        : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {copiedPassword ? 'check' : 'content_copy'}
+                    </span>
+                    <span>{copiedPassword ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Provide this credential securely via encrypted WhatsApp/SMS to the verified operator phone.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Mandatory Audit Rationale (SEC-01) *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={resetReason}
+                  onChange={(e) => setResetReason(e.target.value)}
+                  placeholder="e.g. Lost device, corridor credential renewal, scheduled cycle"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="requireChange"
+                  checked={requirePasswordChange}
+                  onChange={(e) => setRequirePasswordChange(e.target.checked)}
+                  className="rounded text-primary focus:ring-primary"
+                />
+                <label htmlFor="requireChange" className="text-slate-700 text-[11px] cursor-pointer">
+                  Require operator to create new password upon next login
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserForPasswordReset(null)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-primary text-white font-semibold hover:bg-primary-container shadow-sm flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">verified</span>
+                  Issue Credential & Log Audit
                 </button>
               </div>
             </form>

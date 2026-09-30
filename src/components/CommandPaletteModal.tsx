@@ -5,6 +5,7 @@ interface CommandPaletteModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigate: (path: NavigationPath) => void;
+  onOpenManual?: () => void;
   onToggle?: () => void;
 }
 
@@ -12,6 +13,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   isOpen,
   onClose,
   onNavigate,
+  onOpenManual,
   onToggle,
 }) => {
   const [query, setQuery] = useState('');
@@ -37,6 +39,16 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   if (!isOpen) return null;
 
   const quickItems = [
+    {
+      title: 'Operations & User Manual (In-App & Markdown)',
+      subtitle: 'Complete guide for Administrators, Financial Controllers, Ops Managers & Drivers',
+      category: 'Help & Documentation',
+      icon: 'menu_book',
+      action: () => {
+        onClose();
+        if (onOpenManual) onOpenManual();
+      },
+    },
     {
       title: 'Launch QC & Stress-Test Suite',
       subtitle: '35-Point Automated Launch Verification & Proof Engine',
