@@ -8,7 +8,13 @@ import {
 import { downloadCsv } from '../utils/format';
 import { parseFinancialDocument } from '../utils/documentParser';
 
-export const FinancialStatementsScreen: React.FC = () => {
+interface FinancialStatementsScreenProps {
+  fxRate?: number;
+}
+
+export const FinancialStatementsScreen: React.FC<FinancialStatementsScreenProps> = ({
+  fxRate: propFxRate,
+}) => {
   const [currencyMode, setCurrencyMode] = useState<'USD' | 'KES'>('USD');
   const [activeTab, setActiveTab] = useState<
     'pnl' | 'balance-sheet' | 'cashflow' | 'bank-ledger' | 'swift-inspector' | 'upload-docs'
@@ -19,7 +25,7 @@ export const FinancialStatementsScreen: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const fxRate = BEYAYAN_COMPANY_PROFILE.defaultFxRateKesPerUsd;
+  const fxRate = propFxRate || BEYAYAN_COMPANY_PROFILE.defaultFxRateKesPerUsd || 129.35;
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -140,7 +146,7 @@ export const FinancialStatementsScreen: React.FC = () => {
       ['Gross Freight Haulage Revenue (Accrued)', freightRevenue.toFixed(2), (freightRevenue * fxRate).toFixed(2), 'Accrued corridor billings + Inward SWIFT Pacs.008 wire settlements'],
       ['Direct Corridor Haulage Costs', (-grossOperatingCost).toFixed(2), (-grossOperatingCost * fxRate).toFixed(2), 'Direct voyage costs: Fuel vouchers, Malaba/Busia border tolls, weighbridge cess'],
       ['GROSS OPERATING SURPLUS', grossProfit.toFixed(2), (grossProfit * fxRate).toFixed(2), 'Direct corridor haulage contribution margin'],
-      ['Administrative OpEx & Yard Overheads', (-operatingExpenses).toFixed(2), (-operatingExpenses * fxRate).toFixed(2), 'Head office operations, yard maintenance, CANBUS telematics licenses'],
+      ['Administrative OpEx & Yard Overheads', (-operatingExpenses).toFixed(2), (-operatingExpenses * fxRate).toFixed(2), 'Head office operations, yard maintenance, GPS tracking & communications'],
       ['NET OPERATING SURPLUS', netIncome.toFixed(2), (netIncome * fxRate).toFixed(2), 'Earnings before tax and shareholder drawings'],
       ['Operating Surplus Margin', `${operatingMarginPct.toFixed(2)}%`, `${operatingMarginPct.toFixed(2)}%`, 'Surplus divided by Gross Freight Revenue'],
       [],

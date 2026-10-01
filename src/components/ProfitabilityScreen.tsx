@@ -323,7 +323,7 @@ export const ProfitabilityScreen: React.FC = () => {
         </div>
 
         <div className="hidden md:flex items-center gap-2 font-label-code text-[11px] text-outline px-2">
-          <span>Live FX: 1 USD = 132.40 KES</span>
+          <span>Live FX: 1 USD = 129.35 KES</span>
           <span>•</span>
           <span>1 UGX = 0.035 KES</span>
         </div>

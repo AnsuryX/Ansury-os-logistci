@@ -20,7 +20,7 @@ export interface ParseResult {
 export function parseFinancialDocument(
   fileName: string,
   rawContent: string,
-  exchangeRateKesPerUsd: number = 132.5
+  exchangeRateKesPerUsd: number = 129.35
 ): ParseResult {
   const trimmed = rawContent.trim();
   if (!trimmed) {

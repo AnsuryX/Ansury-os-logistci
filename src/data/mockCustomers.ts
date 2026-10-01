@@ -108,7 +108,7 @@ export const INITIAL_COMPANY_PROFILE: CompanyProfile = {
   accountNumber: '01306297851250',
   ibanMasked: '1.31E+12 (Masked IBAN)',
   defaultCurrency: 'USD',
-  exchangeRateKesPerUsd: 127.2,
+  exchangeRateKesPerUsd: 129.3,
   hqAddress: 'Industrial Area, Enterprise Road, Nairobi, Kenya',
   keyDirector: 'Akbar Ahmed Abdulrahman',
   directorId: '24312880',

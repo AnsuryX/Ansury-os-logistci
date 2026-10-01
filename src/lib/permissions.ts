@@ -79,7 +79,7 @@ export const ROLE_METADATA: Record<AppRole, RoleMetadata> = {
     label: 'Fleet Operations Manager',
     badgeTitle: 'FLEET OPS MANAGER',
     badgeColor: 'bg-blue-700 text-white',
-    description: 'Corridor haulage dispatches, vehicle health, CANBUS fuel telemetry, and driver allocations.',
+    description: 'Corridor haulage dispatches, vehicle health, fleet fuel telemetry, and driver allocations.',
     responsibilities: [
       'Prime mover & rigid truck specifications & maintenance',
       'Waybill dispatch & turnaround scheduling',
@@ -108,7 +108,7 @@ export const ROLE_METADATA: Record<AppRole, RoleMetadata> = {
     description: 'Read-only visibility across fleet, trips, fuel metrics, and personal truck vouchers; voucher submission only.',
     responsibilities: [
       'Read-only inspection of fleet status and trips',
-      'Personal CANBUS fuel efficiency monitoring',
+      'Personal route fuel efficiency monitoring',
       'Submit corridor fuel advance & toll vouchers for assigned truck',
       'All approvals, adjustments, and settings locked',
     ],

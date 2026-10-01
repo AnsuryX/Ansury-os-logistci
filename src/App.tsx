@@ -109,7 +109,7 @@ function AppShell() {
       severityColor: 'bg-error-container text-on-error-container',
       timestamp: '2 hours ago',
       details:
-        'CANBUS fuel flow meter registered 54.2 L/100km on the climb toward Mai Mahiu (+14.2% variance). Sensor logs show 3 extended idle stops.',
+        'GPS route tracker and fuel voucher log registered 54.2 L/100km on the climb toward Mai Mahiu (+14.2% variance). Corridor GPS logs show 3 extended idle stops.',
       impact: 'Estimated fuel excess cost: KES 8,400',
       actionText: 'Dispatch Driver Telemetry Debrief',
     },
@@ -851,6 +851,7 @@ function AppShell() {
           companyName={companyProfile.legalName}
           accountNumber={companyProfile.accountNumber}
           userName={user?.fullName || userProfile.fullName}
+          exchangeRate={companyProfile.exchangeRateKesPerUsd || 129.35}
         />
 
         {/* Dynamic Route View (offset by Header height 16 = 4rem = 64px) */}
@@ -914,6 +915,7 @@ function AppShell() {
               onUpdateTripStatus={handleUpdateTripStatus}
               onDeleteTrip={handleDeleteTrip}
               initialOpenCreateModal={isNewTripModalRequested}
+              exchangeRate={companyProfile.exchangeRateKesPerUsd || 129.35}
             />
           )}
 
@@ -985,6 +987,7 @@ function AppShell() {
               onRecordInvoicePayment={handleRecordInvoicePayment}
               onDeleteInvoice={handleDeleteInvoice}
               onNavigate={(path: NavigationPath) => setCurrentPath(path)}
+              exchangeRate={companyProfile.exchangeRateKesPerUsd || 129.35}
             />
           )}
 
@@ -1018,7 +1021,7 @@ function AppShell() {
           )}
 
           {(currentPath === 'financial-statements' || currentPath === 'pl-cashflow') && (
-            <FinancialStatementsScreen />
+            <FinancialStatementsScreen fxRate={companyProfile.exchangeRateKesPerUsd || 129.35} />
           )}
 
           {currentPath === 'anomalies-engine' && (

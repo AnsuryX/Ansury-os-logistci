@@ -51,7 +51,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
       'Submitted By',
       'Approved By',
       'Approval Status',
-      'CANBUS Telemetry Verification',
+      'GPS & Odometer Verification',
       'Receipt Attachment Status',
     ];
 
@@ -497,7 +497,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                 <span className="material-symbols-outlined text-tertiary text-[16px] mt-0.5">check</span>
                 <div>
                   <span className="font-bold text-on-surface block">Fuel Odometer Verification</span>
-                  <span className="text-outline">CANBUS telemetry must match fill volume within ±3.0%.</span>
+                  <span className="text-outline">Trip odometer log must match fill volume within ±3.0%.</span>
                 </div>
               </div>
 

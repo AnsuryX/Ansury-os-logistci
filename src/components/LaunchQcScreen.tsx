@@ -238,7 +238,7 @@ export const LaunchQcScreen: React.FC<LaunchQcScreenProps> = ({
       name: 'Distance Verified Against Telemetry',
       ruleOrFormula: 'Odometer End - Odometer Start = Route Distance (km)',
       status: 'passed',
-      proofText: 'Mombasa Port → Kampala Goodshed: 1,180.0 km logged by GPS CANBUS tracker',
+      proofText: 'Mombasa Port → Kampala Goodshed: 1,180.0 km logged by GPS corridor tracker',
       auditEvidence: 'Cross-checked with Malaba OSBP customs transit declaration distance tables',
     },
     {
@@ -281,7 +281,7 @@ export const LaunchQcScreen: React.FC<LaunchQcScreenProps> = ({
       id: 'FLT-07',
       category: 'Fleet',
       name: 'Anomalies Engine Verified',
-      ruleOrFormula: 'Flags CANBUS deviation: burn > 15% variance, fuel siphoning drop, or missing odometer',
+      ruleOrFormula: 'Flags telemetry deviation: burn > 15% variance, fuel voucher mismatch, or missing odometer',
       status: 'passed',
       proofText: 'Anomaly flag triggered on KDA 542T Naivasha climb (54.2 L/100km vs 47.5 target due to idle stop)',
       auditEvidence: 'AnomaliesScreen correctly displays 3 pending signals with actionable audit resolution',

@@ -65,10 +65,10 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <span className="font-label-code text-[11px] font-bold bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20">
-              FLEET TELEMATICS & CANBUS
+              FLEET TELEMATICS & TRACKING
             </span>
             <span className="font-label-code text-[11px] text-outline">
-              OBD-II / CANBUS J1939 Telemetry & NFC Fuel Monitoring
+              Corridor GPS Tracking & Fleet Fuel Monitoring
             </span>
           </div>
 
@@ -282,7 +282,7 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
               <div className="pt-2 border-t border-[#eff4ff] flex items-center justify-between text-[11px]">
                 <span className="text-tertiary flex items-center gap-1 font-medium">
                   <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                  CANBUS Online
+                  GPS Tracking Online
                 </span>
                 <div className="flex items-center gap-2">
                   <button
@@ -429,7 +429,7 @@ export const FleetScreen: React.FC<FleetScreenProps> = ({
                   {selectedVehicle.reg} Diagnostic Telemetry
                 </h3>
                 <span className="font-label-code text-[11px] text-outline">
-                  {selectedVehicle.makeModel} • J1939 Live CANBUS Stream
+                  {selectedVehicle.makeModel} • Telemetry & GPS Stream
                 </span>
               </div>
               <button

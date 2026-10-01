@@ -469,16 +469,38 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
 
             <div>
-              <label className="block font-label-sm text-[11px] text-outline font-semibold uppercase mb-1">
-                Live FX Conversion Rate (KES per 1 USD)
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-label-sm text-[11px] text-outline font-semibold uppercase">
+                  Live FX Conversion Rate (KES per 1 USD)
+                </label>
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                  Current Market: ~129.35 KES
+                </span>
+              </div>
               <input
                 type="number"
                 step="0.05"
                 value={companyForm.exchangeRateKesPerUsd}
-                onChange={(e) => setCompanyForm({ ...companyForm, exchangeRateKesPerUsd: parseFloat(e.target.value) || 127.2 })}
+                onChange={(e) => setCompanyForm({ ...companyForm, exchangeRateKesPerUsd: parseFloat(e.target.value) || 129.35 })}
                 className="w-full h-10 px-3 bg-surface-container-low rounded-xl font-label-code font-bold text-on-surface border border-[#dce9ff] focus:outline-none"
               />
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span className="text-[10px] text-slate-500 font-medium">Market Presets:</span>
+                {[129.00, 129.35, 129.50, 129.80].map((rate) => (
+                  <button
+                    key={rate}
+                    type="button"
+                    onClick={() => setCompanyForm({ ...companyForm, exchangeRateKesPerUsd: rate })}
+                    className={`px-2 py-0.5 rounded text-[10px] font-label-code border transition-all ${
+                      companyForm.exchangeRateKesPerUsd === rate
+                        ? 'bg-primary text-white border-primary font-bold'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {rate.toFixed(2)} KES
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>

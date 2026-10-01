@@ -644,7 +644,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </span>
             </div>
             <p className="font-body-sm text-[12px] text-outline mt-0.5">
-              Live CANBUS telemetry feed, fuel burn ratios, trip codes and driver assignments.
+              Live fleet tracking feed, fuel burn ratios, trip codes and driver assignments.
             </p>
           </div>
 
@@ -794,7 +794,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
         {/* Table Footer */}
         <div className="p-3 bg-surface-container-low border-t border-[#e5eeff] flex items-center justify-between text-[11px] text-outline">
-          <span>Showing {filteredVehicles.length} of {vehicles.length} Fleet Assets • CANBUS Telemetry Gateway Online</span>
+          <span>Showing {filteredVehicles.length} of {vehicles.length} Fleet Assets • Fleet Telemetry Gateway Online</span>
           <div className="flex items-center gap-2">
             <span className="font-label-code font-bold text-on-surface">All {filteredVehicles.length} Assets Loaded</span>
           </div>

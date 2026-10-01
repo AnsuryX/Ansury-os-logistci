@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({
   companyName = 'BEYAYAN LIMITED',
   accountNumber = '01306297851250',
   userName,
-  exchangeRate = 127.20,
+  exchangeRate = 129.30,
 }) => {
   const { user, role, signOut } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);

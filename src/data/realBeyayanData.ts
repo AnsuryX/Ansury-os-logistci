@@ -12,7 +12,7 @@ export const BEYAYAN_COMPANY_PROFILE = {
   tradeActivity: 'Cross-Border Heavy Fuel Oil (HFO) & Petroleum Transport Corridor',
   keyDirector: 'Akbar Ahmed Abdulrahman (National ID: 24312880)',
   keyShareholder: 'Ali Ahmed Ali',
-  defaultFxRateKesPerUsd: 127.2,
+  defaultFxRateKesPerUsd: 129.3,
 };
 
 export const REAL_SWIFT_MESSAGES: SwiftMessage[] = [

@@ -15,7 +15,7 @@ const DEFAULT_ANOMALIES: AnomalyIncident[] = [
     severityColor: 'bg-error-container text-on-error-container',
     timestamp: '2 hours ago',
     details:
-      'CANBUS fuel flow meter registered 54.2 L/100km on the climb toward Mai Mahiu, which is 14.2% above the Actros 2640 loaded baseline (47.5 L/100km). Sensor logs show 3 extended idle stops with engine running.',
+      'GPS route tracker and fuel voucher log registered 54.2 L/100km on the climb toward Mai Mahiu, which is 14.2% above the Actros 2640 loaded baseline (47.5 L/100km). Trip logs show 3 extended idle stops with engine running.',
     impact: 'Estimated fuel excess cost: KES 8,400',
     actionText: 'Dispatch Driver Telemetry Debrief',
   },

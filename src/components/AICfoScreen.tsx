@@ -91,7 +91,7 @@ export const AICfoScreen: React.FC = () => {
           "• **Asset**: KDA 542T (Mercedes Actros 2640, Driver: John Kuria) [Source: fleet_telematics #KDA 542T]\n" +
           "• **Corridor**: Nairobi → Tororo / Kampala (Naivasha climb)\n" +
           "• **Observed Burn**: **54.2 L/100km** vs baseline target of **47.5 L/100km** (+14.2% variance).\n" +
-          "• **CANBUS Diagnostic**: 3 extended idle stops (totalling 42 minutes) with air-conditioning active while queueing at Mai Mahiu weighbridge bypass.\n" +
+          "• **GPS Route Diagnostic**: 3 extended idle stops (totalling 42 minutes) with air-conditioning active while queueing at Mai Mahiu weighbridge bypass.\n" +
           "• **Classification**: Labeled as behavioral idle queueing rather than fuel theft or injector failure. Mechanical turbo boost nominal at 2.1 bar.",
         citations: ['fleet_telematics #KDA 542T', 'system_settings #ansury_fleet_default'],
       };
@@ -228,7 +228,7 @@ export const AICfoScreen: React.FC = () => {
             </span>
           </div>
           <p className="font-body-md text-[13px] text-outline mt-0.5">
-            Real-time grounded ledger queries, fuel CANBUS diagnostics, and KRA Section 23 statutory audits. Unanswerable queries return insufficient data without hallucination.
+            Real-time grounded ledger queries, fuel expense audits, and KRA Section 23 statutory audits. Unanswerable queries return insufficient data without hallucination.
           </p>
         </div>
       </div>
@@ -340,7 +340,7 @@ export const AICfoScreen: React.FC = () => {
               </div>
               <div className="bg-surface-container-low p-3 rounded-2xl border border-[#dce9ff] text-[12px] text-outline flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
-                <span>Ansury AI CFO is pulling verified bank wires, AR aging, and CANBUS fuel telematics...</span>
+                <span>Ansury AI CFO is pulling verified bank wires, AR aging, and fleet fuel telemetry...</span>
               </div>
             </div>
           )}

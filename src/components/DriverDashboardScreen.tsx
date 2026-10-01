@@ -146,7 +146,7 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
             Welcome, {user?.fullName || 'Driver Joseph Mwangi'}
           </h1>
           <p className="font-body-md text-[13px] text-outline mt-0.5">
-            Your corridor dispatch manifest, CANBUS telemetry baselines, fuel card balance & expense submission.
+            Your corridor dispatch manifest, route performance baselines, fuel card balance & expense submission.
           </p>
         </div>
 
@@ -259,7 +259,7 @@ export const DriverDashboardScreen: React.FC<DriverDashboardScreenProps> = ({
           <div>
             <div className="flex items-center justify-between">
               <span className="font-label-sm text-[11px] text-outline uppercase font-semibold">
-                CANBUS Fuel Score
+                Fleet Fuel Score
               </span>
               <span className="material-symbols-outlined text-tertiary text-[20px]">speed</span>
             </div>

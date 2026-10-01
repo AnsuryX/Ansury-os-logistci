@@ -49,7 +49,7 @@ export const ReceiptAuditModal: React.FC<ReceiptAuditModalProps> = ({
                   Fiscal Receipt & Telemetry Audit
                 </span>
                 <span className="font-label-code text-[11px] bg-tertiary-fixed text-on-tertiary-fixed px-1.5 py-0.5 rounded font-bold">
-                  CANBUS Matched
+                  GPS Corroborated
                 </span>
               </div>
               <p className="font-label-sm text-[11px] text-outline">
@@ -142,7 +142,7 @@ export const ReceiptAuditModal: React.FC<ReceiptAuditModalProps> = ({
             </div>
           </div>
 
-          {/* Right: CANBUS & GPS Telemetry Cross-Validation */}
+          {/* Right: GPS Telemetry & Odometer Cross-Validation */}
           <div className="space-y-3">
             <div className="bg-surface-container-low p-3 rounded-xl border border-[#dce9ff]">
               <div className="font-label-sm text-[11px] text-outline uppercase font-semibold mb-1">
@@ -181,7 +181,7 @@ export const ReceiptAuditModal: React.FC<ReceiptAuditModalProps> = ({
                 Audit Verification Passed
               </div>
               <p className="font-body-sm text-[11px] text-emerald-700 mt-1">
-                Both optical OCR extraction and CANBUS onboard fuel level telemetry corroborate 210L refuel. This expense fulfills KRA Section 23 statutory deduction prerequisites.
+                Both optical OCR extraction and fuel sensor level telemetry corroborate 210L refuel. This expense fulfills KRA Section 23 statutory deduction prerequisites.
               </p>
             </div>
 

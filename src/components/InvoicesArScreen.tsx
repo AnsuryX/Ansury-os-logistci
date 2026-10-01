@@ -26,7 +26,7 @@ interface InvoicesArScreenProps {
 export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
   customers,
   vehicles,
-  exchangeRate = 127.2,
+  exchangeRate = 129.3,
   invoices: externalInvoices,
   onInvoicesChange,
   onSaveInvoice,
@@ -74,7 +74,7 @@ export const InvoicesArScreen: React.FC<InvoicesArScreenProps> = ({
   const [newInvAmount, setNewInvAmount] = useState('11800');
   const [newInvDueDate, setNewInvDueDate] = useState('2026-09-30');
 
-  const fxRate = exchangeRate || 127.2;
+  const fxRate = exchangeRate || 129.3;
 
   const triggerToast = (msg: string) => {
     setToastMessage(msg);

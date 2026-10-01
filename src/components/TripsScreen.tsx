@@ -11,6 +11,7 @@ interface TripsScreenProps {
   onUpdateTripStatus: (tripId: string, status: TripDispatch['status']) => void;
   onDeleteTrip?: (tripId: string, reason: string) => void;
   initialOpenCreateModal?: boolean;
+  exchangeRate?: number;
 }
 
 export const TripsScreen: React.FC<TripsScreenProps> = ({
@@ -21,6 +22,7 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
   onUpdateTripStatus,
   onDeleteTrip,
   initialOpenCreateModal = false,
+  exchangeRate = 129.3,
 }) => {
   const { role, permissions } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,7 +98,7 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
 
     const matchedVeh = vehicles.find((v) => v.reg === selectedTruckReg);
     const parsedKes = parseFloat(grossKes) || 350000;
-    const parsedUsd = Math.round(parsedKes / 132.5);
+    const parsedUsd = Math.round(parsedKes / (exchangeRate || 129.35));
     const newTripId = `TRP-0${Math.floor(250 + Math.random() * 50)}`;
     const newWaybill = `WB-2026-${Math.floor(950 + Math.random() * 50)}`;
 
@@ -290,7 +292,7 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
             </div>
           </div>
           <div className="mt-2 text-[11px] font-label-code text-outline">
-            ~ ${(totalValueInTransitKes / 132.5).toLocaleString('en-US', { maximumFractionDigits: 0 })} USD
+            ~ ${(totalValueInTransitKes / (exchangeRate || 129.35)).toLocaleString('en-US', { maximumFractionDigits: 0 })} USD
           </div>
         </div>
 
@@ -851,7 +853,7 @@ export const TripsScreen: React.FC<TripsScreenProps> = ({
 
                 <div className="pt-2 text-[10px] text-slate-600">
                   <div><strong>Special Instructions:</strong> {selectedDocketTrip.notes}</div>
-                  <div className="mt-1">Verified against GPS CANBUS Gateway. Weighbridge tolerance 0.0% overload.</div>
+                  <div className="mt-1">Verified against Corridor GPS Telemetry Gateway. Weighbridge tolerance 0.0% overload.</div>
                 </div>
               </div>
             </div>

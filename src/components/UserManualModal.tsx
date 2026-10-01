@@ -34,7 +34,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
     { id: 'admin_users', label: '2. Admin & User Roles', icon: 'manage_accounts' },
     { id: 'driver_portal', label: '3. Driver Workstation', icon: 'local_shipping' },
     { id: 'finance_reconcile', label: '4. Bank & M-Pesa Reconcile', icon: 'sync_alt' },
-    { id: 'fleet_telemetry', label: '5. Fleet & CANBUS Telemetry', icon: 'speed' },
+    { id: 'fleet_telemetry', label: '5. Fleet & GPS Telemetry', icon: 'speed' },
     { id: 'invoices_ar', label: '6. Invoices, AR & KRA Tax', icon: 'receipt_long' },
     { id: 'shortcuts_data', label: '7. Shortcuts & Data Purge', icon: 'keyboard' },
   ];
@@ -159,7 +159,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
                   <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-1">
                     <span className="font-bold text-slate-900 block">Dual Currency Operations</span>
                     <p className="text-slate-500">
-                      Standardized multi-currency engine supporting KES and USD. Freight tariffs quoted in USD are automatically converted to KES for KRA fiscal schedules at the standard bank peg (1 USD = 132.50 KES).
+                      Standardized multi-currency engine supporting KES and USD. Freight tariffs quoted in USD are automatically converted to KES for KRA fiscal schedules at the standard bank peg (1 USD = 129.35 KES).
                     </p>
                   </div>
 
@@ -190,7 +190,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
                     {[
                       { role: 'Super Administrator', badge: 'bg-primary text-white', desc: 'Full configuration, user provisioning, audit inspection, and system settings.' },
                       { role: 'Senior Financial Controller', badge: 'bg-emerald-700 text-white', desc: 'AR aging, invoices, bank reconciliation match engine, and KRA tax schedules.' },
-                      { role: 'Fleet Operations Manager', badge: 'bg-blue-700 text-white', desc: 'Fleet specs, CANBUS telematics, fuel spike anomaly debriefs, and dispatches.' },
+                      { role: 'Fleet Operations Manager', badge: 'bg-blue-700 text-white', desc: 'Fleet specs, GPS tracking, fuel spike anomaly debriefs, and dispatches.' },
                       { role: 'Dispatcher / Clerk', badge: 'bg-amber-600 text-white', desc: 'Waybill entry, route milestone updates, and toll expense submissions.' },
                       { role: 'Corridor Prime Mover Driver', badge: 'bg-slate-700 text-white', desc: 'Read-only fleet observability, dedicated Driver Portal, vehicle pre-trip checklist, 30-second receipt snap, and SOS breakdown broadcast.' },
                     ].map((r) => (
@@ -329,15 +329,15 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
               <div className="space-y-4">
                 <div className="border-b border-slate-200 pb-3">
                   <h3 className="text-lg font-bold text-slate-900">
-                    5. Fleet Specifications, CANBUS Telematics &amp; Anomaly Engine
+                    5. Fleet Specifications, GPS Telemetry &amp; Anomaly Engine
                   </h3>
                   <p className="text-slate-500 text-[11px] mt-0.5">
-                    Live fuel efficiency monitoring, CANBUS flow meters, and fuel spike detection
+                    Live fuel efficiency monitoring, GPS route tracking, and fuel variance detection
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="font-bold text-slate-900 text-sm">CANBUS Fuel Metrics (km/L &amp; L/100km)</h4>
+                  <h4 className="font-bold text-slate-900 text-sm">Fleet Fuel Metrics (km/L &amp; L/100km)</h4>
                   <p className="text-slate-600">
                     Ansury OS ingests live telemetry from Mercedes-Benz Actros 2640, Scania R450, and Isuzu Giga prime movers. Target fuel baselines are calibrated by corridor terrain:
                   </p>
@@ -351,7 +351,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
                 <div className="space-y-2 pt-2">
                   <h4 className="font-bold text-slate-900 text-sm">Resolving Telemetry Anomalies</h4>
                   <p className="text-slate-600">
-                    When CANBUS registers an unexpected fuel level drop outside an approved fuel depot, an incident is flagged in <strong>Anomalies &amp; Engine</strong>. The Fleet Operations Manager conducts a debrief, enters notes, and clicks &quot;Resolve Anomaly&quot; to clear the alert.
+                    When GPS tracking or fuel logging registers an unexpected fuel variance outside an approved fuel depot, an incident is flagged in <strong>Anomalies &amp; Engine</strong>. The Fleet Operations Manager conducts a debrief, enters notes, and clicks &quot;Resolve Anomaly&quot; to clear the alert.
                   </p>
                 </div>
               </div>
