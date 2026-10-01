@@ -41,6 +41,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# curl is required by platform-injected (Coolify) container health probes
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Install runtime dependencies only
 COPY package*.json ./
 RUN npm install --omit=dev && npm install -g tsx || npm install
