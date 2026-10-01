@@ -1,14 +1,14 @@
 export const SUPABASE_CONFIG = {
-  url: 'https://qsovpdsdoycvennirfvl.supabase.co',
-  publishableKey: 'sb_publishable_PXecSYULOYkPbQ68Y0-J2A__TxdB8O9',
-  projectRef: 'qsovpdsdoycvennirfvl',
-  sqlEditorUrl: 'https://supabase.com/dashboard/project/qsovpdsdoycvennirfvl/sql/new',
-  dashboardUrl: 'https://supabase.com/dashboard/project/qsovpdsdoycvennirfvl',
+  url: 'https://bngjwnzfwmiacwwomfyx.supabase.co',
+  publishableKey: 'sb_publishable_zZZ4uQWuxChq4EuwE9rF9A_jXRZDOz0',
+  projectRef: 'bngjwnzfwmiacwwomfyx',
+  sqlEditorUrl: 'https://supabase.com/dashboard/project/bngjwnzfwmiacwwomfyx/sql/new',
+  dashboardUrl: 'https://supabase.com/dashboard/project/bngjwnzfwmiacwwomfyx',
 };
 
 export const SUPABASE_SQL_SCHEMA = `-- ====================================================================
 -- ANSURY OS / BEYAYAN LIMITED - SUPABASE ENTERPRISE DATABASE SCHEMA
--- Project: qsovpdsdoycvennirfvl
+-- Project: bngjwnzfwmiacwwomfyx (Bayayan Logistic ansari os)
 -- Generated: 2026-09-22
 -- ====================================================================
 

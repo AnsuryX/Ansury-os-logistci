@@ -20,6 +20,13 @@ RUN npm ci || npm install
 # Copy application source code
 COPY . .
 
+# Build-time environment (injected as build args by Coolify)
+# Client bundle only ever sees VITE_* publishable values — never service-role secrets.
+ARG VITE_SUPABASE_URL=""
+ARG VITE_SUPABASE_PUBLISHABLE_KEY=""
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_PUBLISHABLE_KEY=$VITE_SUPABASE_PUBLISHABLE_KEY
+
 # Build Vite production bundle to /app/dist
 RUN npm run build
 

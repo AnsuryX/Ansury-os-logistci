@@ -32,16 +32,7 @@ PORT=3000
 # Google Gemini AI API Key (Server-side only — never exposed to client)
 GEMINI_API_KEY="AIzaSy..."
 
-# Cloud App URL
-APP_URL="https://ais-dev-kfzh5guhfhtgomwodx6ns7-259601339379.europe-west2.run.app"
-
-# Supabase PostgreSQL Configuration
-VITE_SUPABASE_URL="https://qsovpdsdoycvennirfvl.supabase.co"
-VITE_SUPABASE_PUBLISHABLE_KEY="sb_publishable_PXecSYULOYkPbQ68Y0-J2A__TxdB8O9"
-
-# Supabase Server-Side Secret Key (Used in Edge Functions & Migrations)
-SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-```
+#
 
 > **Security Mandate**: `GEMINI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` must **NEVER** be prefixed with `VITE_` and must **NEVER** be committed into client-facing bundles.
 
@@ -167,38 +158,10 @@ Execute these verification checks before cutting a production release:
 
 Ansury Logistics OS is pre-configured with a production-ready multi-stage `Dockerfile` and `docker-compose.yml` for seamless deployment to **Coolify** (v4+).
 
-### Step-by-Step Coolify Setup:
 
-1. **Create New Resource in Coolify**:
-   - Go to your Coolify dashboard.
-   - Click **+ New Resource** $\to$ **Public/Private Repository** (or **Docker Compose**).
-   - Enter your repository URL and branch (e.g. `main`).
-
-2. **Select Build Pack**:
-   - Choose **Dockerfile** as the Build Pack (Coolify will detect the root `Dockerfile`).
-   - If using Docker Compose, select **Docker Compose** (Coolify will use `docker-compose.yml`).
-
-3. **Configure Port & Network**:
-   - **Port**: Set `3000` (mandatory for Ansury OS).
-   - Coolify will automatically configure Traefik reverse-proxy routing to port `3000`.
-
-4. **Configure Environment Variables in Coolify**:
-   In the **Environment Variables** tab of your Coolify application, add:
-   ```env
-   NODE_ENV=production
-   PORT=3000
-   GEMINI_API_KEY=your_gemini_api_key_here
-   VITE_SUPABASE_URL=https://your-supabase-id.supabase.co
-   VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
    ```
 
-5. **Health Check & Domain**:
-   - In **Domains**, enter your desired domain name (e.g. `https://logistics.yourdomain.com`). Coolify will automatically issue a free Let's Encrypt SSL certificate.
-   - **Health Check Path**: `/` or `/api/ai-cfo` (interval: 30s).
 
-6. **Deploy**:
-   - Click **Deploy**. Coolify builds the optimized multi-stage image, caches layers, and launches the container with zero downtime.
 
 7. **Automatic Webhooks (Optional)**:
    - Copy the Webhook URL from Coolify into your GitHub / GitLab repository settings to trigger auto-deployments on every `git push`.
