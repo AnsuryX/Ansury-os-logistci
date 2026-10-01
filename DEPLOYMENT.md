@@ -88,6 +88,8 @@ The `ai-cfo` Edge Function (v2) is deployed and ACTIVE on `bngjwnzfwmiacwwomfyx`
 
 **Failover chain**: Supabase Edge Function → Express `/api/ai-cfo` (on the Coolify container) → `[Cached heuristic — Edge Function offline]`.
 
+**Status (2026-10-01)**: `GEMINI_API_KEY` is provisioned in the Coolify app environment, so the **Express `/api/ai-cfo` proxy serves live Gemini 3.8 Flash synthesis in production**. The Edge Function tier still needs its own secret to serve live (`GEMINI_API_KEY` is not yet in Supabase function secrets) — it currently returns the structured 503 and the client uses the Express path.
+
 To enable live Gemini synthesis in the Edge Function itself:
 
 ```bash
